@@ -1,0 +1,46 @@
+# ArgoCD Application - Finance Service Staging
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: finance-service-staging
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: goapps
+  source:
+    repoURL: https://github.com/mutugading/goapps-infra.git
+    targetRevision: main
+    path: services/finance-service/overlays/staging
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: goapps-staging
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+---
+# ArgoCD Application - Finance Service Production
+# NOTE: Manual sync required for production safety
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: finance-service-production
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: goapps
+  source:
+    repoURL: https://github.com/mutugading/goapps-infra.git
+    targetRevision: main
+    path: services/finance-service/overlays/production
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: goapps-production
+  syncPolicy:
+    # No automated sync for production - manual approval required
+    syncOptions:
+      - CreateNamespace=true

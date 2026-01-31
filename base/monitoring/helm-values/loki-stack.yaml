@@ -1,0 +1,16 @@
+# ============================================================================
+# Helm values for Loki stack
+# ============================================================================
+#
+# Apply with:
+# helm upgrade loki grafana/loki-stack -f loki-stack.yaml -n monitoring
+#
+# ============================================================================
+
+loki:
+  persistence:
+    enabled: true
+    size: 10Gi
+
+promtail:
+  enabled: true

@@ -1,0 +1,37 @@
+# Base Namespaces
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: database
+  labels:
+    name: database
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring
+  labels:
+    name: monitoring
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: minio
+  labels:
+    name: minio
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: goapps-staging
+  labels:
+    name: goapps-staging
+    environment: staging
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: goapps-production
+  labels:
+    name: goapps-production
+    environment: production

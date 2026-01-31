@@ -1,0 +1,889 @@
+apiVersion: 1
+groups:
+    - orgId: 1
+      name: kubernetes-cluster-alerts
+      folder: Kubernetes
+      interval: 1m
+      rules:
+        # ============================================
+        # 1. Node Not Ready - CRITICAL
+        # ============================================
+        - uid: node-not-ready-alert
+          title: Node Not Ready
+          condition: C
+          data:
+            - refId: A
+              relativeTimeRange:
+                from: 600
+                to: 0
+              datasourceUid: prometheus
+              model:
+                datasource:
+                    type: prometheus
+                    uid: prometheus
+                editorMode: code
+                expr: kube_node_status_condition{condition="Ready", status="true"} == 0
+                instant: true
+                intervalMs: 1000
+                legendFormat: __auto
+                maxDataPoints: 43200
+                range: false
+                refId: A
+            - refId: C
+              datasourceUid: __expr__
+              model:
+                conditions:
+                    - evaluator:
+                        params:
+                            - 0
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params:
+                            - C
+                      reducer:
+                        params: []
+                        type: last
+                      type: query
+                datasource:
+                    type: __expr__
+                    uid: __expr__
+                expression: A
+                intervalMs: 1000
+                maxDataPoints: 43200
+                refId: C
+                type: threshold
+          noDataState: OK
+          execErrState: Error
+          for: 5m
+          keepFiringFor: 5m
+          annotations:
+            description: Node {{ $labels.node }} is not ready for more than 5 minutes
+            summary: "🔴 Node {{ $labels.node }} is NOT READY"
+          labels:
+            severity: critical
+          isPaused: false
+          notification_settings:
+            receiver: Email Alerts
+
+        # ============================================
+        # 2. Node High CPU - WARNING
+        # ============================================
+        - uid: node-high-cpu-alert
+          title: Node High CPU Usage
+          condition: C
+          data:
+            - refId: A
+              relativeTimeRange:
+                from: 600
+                to: 0
+              datasourceUid: prometheus
+              model:
+                datasource:
+                    type: prometheus
+                    uid: prometheus
+                editorMode: code
+                expr: (1 - avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) by (instance)) * 100 > 85
+                instant: true
+                intervalMs: 1000
+                legendFormat: __auto
+                maxDataPoints: 43200
+                range: false
+                refId: A
+            - refId: C
+              datasourceUid: __expr__
+              model:
+                conditions:
+                    - evaluator:
+                        params:
+                            - 0
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params:
+                            - C
+                      reducer:
+                        params: []
+                        type: last
+                      type: query
+                datasource:
+                    type: __expr__
+                    uid: __expr__
+                expression: A
+                intervalMs: 1000
+                maxDataPoints: 43200
+                refId: C
+                type: threshold
+          noDataState: OK
+          execErrState: Error
+          for: 10m
+          keepFiringFor: 5m
+          annotations:
+            description: Node {{ $labels.instance }} CPU usage is above 85% for more than 10 minutes
+            summary: "🟡 High CPU on Node {{ $labels.instance }}"
+          labels:
+            severity: warning
+          isPaused: false
+          notification_settings:
+            receiver: Email Alerts
+
+        # ============================================
+        # 3. Node High Memory - WARNING
+        # ============================================
+        - uid: node-high-memory-alert
+          title: Node High Memory Usage
+          condition: C
+          data:
+            - refId: A
+              relativeTimeRange:
+                from: 600
+                to: 0
+              datasourceUid: prometheus
+              model:
+                datasource:
+                    type: prometheus
+                    uid: prometheus
+                editorMode: code
+                expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 90
+                instant: true
+                intervalMs: 1000
+                legendFormat: __auto
+                maxDataPoints: 43200
+                range: false
+                refId: A
+            - refId: C
+              datasourceUid: __expr__
+              model:
+                conditions:
+                    - evaluator:
+                        params:
+                            - 0
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params:
+                            - C
+                      reducer:
+                        params: []
+                        type: last
+                      type: query
+                datasource:
+                    type: __expr__
+                    uid: __expr__
+                expression: A
+                intervalMs: 1000
+                maxDataPoints: 43200
+                refId: C
+                type: threshold
+          noDataState: OK
+          execErrState: Error
+          for: 10m
+          keepFiringFor: 5m
+          annotations:
+            description: Node {{ $labels.instance }} memory usage is above 90% for more than 10 minutes
+            summary: "🟡 High Memory on Node {{ $labels.instance }}"
+          labels:
+            severity: warning
+          isPaused: false
+          notification_settings:
+            receiver: Email Alerts
+
+        # ============================================
+        # 4. Node Disk Pressure - WARNING
+        # ============================================
+        - uid: node-disk-pressure-alert
+          title: Node Disk Pressure
+          condition: C
+          data:
+            - refId: A
+              relativeTimeRange:
+                from: 600
+                to: 0
+              datasourceUid: prometheus
+              model:
+                datasource:
+                    type: prometheus
+                    uid: prometheus
+                editorMode: code
+                expr: kube_node_status_condition{condition="DiskPressure", status="true"} == 1
+                instant: true
+                intervalMs: 1000
+                legendFormat: __auto
+                maxDataPoints: 43200
+                range: false
+                refId: A
+            - refId: C
+              datasourceUid: __expr__
+              model:
+                conditions:
+                    - evaluator:
+                        params:
+                            - 0
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params:
+                            - C
+                      reducer:
+                        params: []
+                        type: last
+                      type: query
+                datasource:
+                    type: __expr__
+                    uid: __expr__
+                expression: A
+                intervalMs: 1000
+                maxDataPoints: 43200
+                refId: C
+                type: threshold
+          noDataState: OK
+          execErrState: Error
+          for: 5m
+          keepFiringFor: 5m
+          annotations:
+            description: Node {{ $labels.node }} is experiencing disk pressure
+            summary: "🟡 Disk Pressure on Node {{ $labels.node }}"
+          labels:
+            severity: warning
+          isPaused: false
+          notification_settings:
+            receiver: Email Alerts
+
+    - orgId: 1
+      name: kubernetes-workload-alerts
+      folder: Kubernetes
+      interval: 1m
+      rules:
+        # ============================================
+        # 5. Pod CrashLoopBackOff - CRITICAL (All Namespaces)
+        # ============================================
+        - uid: pod-crash-alert
+          title: Pod CrashLoopBackOff
+          condition: C
+          data:
+            - refId: A
+              relativeTimeRange:
+                from: 600
+                to: 0
+              datasourceUid: prometheus
+              model:
+                datasource:
+                    type: prometheus
+                    uid: prometheus
+                editorMode: code
+                expr: kube_pod_container_status_waiting_reason{reason="CrashLoopBackOff"} > 0
+                instant: true
+                intervalMs: 1000
+                legendFormat: __auto
+                maxDataPoints: 43200
+                range: false
+                refId: A
+            - refId: C
+              datasourceUid: __expr__
+              model:
+                conditions:
+                    - evaluator:
+                        params:
+                            - 0
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params:
+                            - C
+                      reducer:
+                        params: []
+                        type: last
+                      type: query
+                datasource:
+                    type: __expr__
+                    uid: __expr__
+                expression: A
+                intervalMs: 1000
+                maxDataPoints: 43200
+                refId: C
+                type: threshold
+          noDataState: OK
+          execErrState: Error
+          for: 2m
+          keepFiringFor: 5m
+          annotations:
+            description: Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} is in CrashLoopBackOff state
+            summary: "🔴 Pod {{ $labels.pod }} is CRASHING"
+          labels:
+            severity: critical
+          isPaused: false
+          notification_settings:
+            receiver: Email Alerts
+
+        # ============================================
+        # 6. Deployment Unavailable - CRITICAL
+        # ============================================
+        - uid: deployment-unavailable-alert
+          title: Deployment Unavailable Replicas
+          condition: C
+          data:
+            - refId: A
+              relativeTimeRange:
+                from: 600
+                to: 0
+              datasourceUid: prometheus
+              model:
+                datasource:
+                    type: prometheus
+                    uid: prometheus
+                editorMode: code
+                expr: kube_deployment_status_replicas_unavailable > 0
+                instant: true
+                intervalMs: 1000
+                legendFormat: __auto
+                maxDataPoints: 43200
+                range: false
+                refId: A
+            - refId: C
+              datasourceUid: __expr__
+              model:
+                conditions:
+                    - evaluator:
+                        params:
+                            - 0
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params:
+                            - C
+                      reducer:
+                        params: []
+                        type: last
+                      type: query
+                datasource:
+                    type: __expr__
+                    uid: __expr__
+                expression: A
+                intervalMs: 1000
+                maxDataPoints: 43200
+                refId: C
+                type: threshold
+          noDataState: OK
+          execErrState: Error
+          for: 5m
+          keepFiringFor: 5m
+          annotations:
+            description: Deployment {{ $labels.deployment }} in namespace {{ $labels.namespace }} has unavailable replicas for more than 5 minutes
+            summary: "🔴 Deployment {{ $labels.deployment }} has unavailable replicas"
+          labels:
+            severity: critical
+          isPaused: false
+          notification_settings:
+            receiver: Email Alerts
+
+        # ============================================
+        # 7. Pod High CPU Usage - WARNING (All Namespaces)
+        # ============================================
+        - uid: pod-high-cpu-alert
+          title: Pod High CPU Usage
+          condition: C
+          data:
+            - refId: A
+              relativeTimeRange:
+                from: 600
+                to: 0
+              datasourceUid: prometheus
+              model:
+                datasource:
+                    type: prometheus
+                    uid: prometheus
+                editorMode: code
+                expr: sum(rate(container_cpu_usage_seconds_total{container!="", container!="POD"}[5m])) by (namespace, pod) * 100 > 80
+                instant: true
+                intervalMs: 1000
+                legendFormat: __auto
+                maxDataPoints: 43200
+                range: false
+                refId: A
+            - refId: C
+              datasourceUid: __expr__
+              model:
+                conditions:
+                    - evaluator:
+                        params:
+                            - 0
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params:
+                            - C
+                      reducer:
+                        params: []
+                        type: last
+                      type: query
+                datasource:
+                    type: __expr__
+                    uid: __expr__
+                expression: A
+                intervalMs: 1000
+                maxDataPoints: 43200
+                refId: C
+                type: threshold
+          noDataState: OK
+          execErrState: Error
+          for: 5m
+          keepFiringFor: 5m
+          annotations:
+            description: Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} CPU usage is above 80% for more than 5 minutes
+            summary: "🟡 High CPU on Pod {{ $labels.pod }}"
+          labels:
+            severity: warning
+          isPaused: false
+          notification_settings:
+            receiver: Email Alerts
+
+        # ============================================
+        # 8. Pod High Memory Usage - WARNING (All Namespaces)
+        # ============================================
+        - uid: pod-high-memory-alert
+          title: Pod High Memory Usage
+          condition: C
+          data:
+            - refId: A
+              relativeTimeRange:
+                from: 600
+                to: 0
+              datasourceUid: prometheus
+              model:
+                datasource:
+                    type: prometheus
+                    uid: prometheus
+                editorMode: code
+                expr: sum(container_memory_usage_bytes{container!="", container!="POD"}) by (namespace, pod) / sum(container_spec_memory_limit_bytes{container!="", container!="POD"} > 0) by (namespace, pod) * 100 > 85
+                instant: true
+                intervalMs: 1000
+                legendFormat: __auto
+                maxDataPoints: 43200
+                range: false
+                refId: A
+            - refId: C
+              datasourceUid: __expr__
+              model:
+                conditions:
+                    - evaluator:
+                        params:
+                            - 0
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params:
+                            - C
+                      reducer:
+                        params: []
+                        type: last
+                      type: query
+                datasource:
+                    type: __expr__
+                    uid: __expr__
+                expression: A
+                intervalMs: 1000
+                maxDataPoints: 43200
+                refId: C
+                type: threshold
+          noDataState: OK
+          execErrState: Error
+          for: 5m
+          keepFiringFor: 5m
+          annotations:
+            description: Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} memory usage is above 85% for more than 5 minutes
+            summary: "🟡 High Memory on Pod {{ $labels.pod }}"
+          labels:
+            severity: warning
+          isPaused: false
+          notification_settings:
+            receiver: Email Alerts
+
+        # ============================================
+        # 9. Pod Frequent Restarts - WARNING
+        # ============================================
+        - uid: pod-restart-alert
+          title: Pod Frequent Restarts
+          condition: C
+          data:
+            - refId: A
+              relativeTimeRange:
+                from: 3600
+                to: 0
+              datasourceUid: prometheus
+              model:
+                datasource:
+                    type: prometheus
+                    uid: prometheus
+                editorMode: code
+                expr: increase(kube_pod_container_status_restarts_total[1h]) > 3
+                instant: true
+                intervalMs: 1000
+                legendFormat: __auto
+                maxDataPoints: 43200
+                range: false
+                refId: A
+            - refId: C
+              datasourceUid: __expr__
+              model:
+                conditions:
+                    - evaluator:
+                        params:
+                            - 0
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params:
+                            - C
+                      reducer:
+                        params: []
+                        type: last
+                      type: query
+                datasource:
+                    type: __expr__
+                    uid: __expr__
+                expression: A
+                intervalMs: 1000
+                maxDataPoints: 43200
+                refId: C
+                type: threshold
+          noDataState: OK
+          execErrState: Error
+          for: 1m
+          keepFiringFor: 5m
+          annotations:
+            description: Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} has restarted more than 3 times in the last hour
+            summary: "🟡 Pod {{ $labels.pod }} frequent restarts"
+          labels:
+            severity: warning
+          isPaused: false
+          notification_settings:
+            receiver: Email Alerts
+
+        # ============================================
+        # 10. HPA at Maximum Replicas - WARNING
+        # ============================================
+        - uid: hpa-maxed-alert
+          title: HPA at Maximum Replicas
+          condition: C
+          data:
+            - refId: A
+              relativeTimeRange:
+                from: 600
+                to: 0
+              datasourceUid: prometheus
+              model:
+                datasource:
+                    type: prometheus
+                    uid: prometheus
+                editorMode: code
+                expr: kube_horizontalpodautoscaler_status_current_replicas == kube_horizontalpodautoscaler_spec_max_replicas
+                instant: true
+                intervalMs: 1000
+                legendFormat: __auto
+                maxDataPoints: 43200
+                range: false
+                refId: A
+            - refId: C
+              datasourceUid: __expr__
+              model:
+                conditions:
+                    - evaluator:
+                        params:
+                            - 0
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params:
+                            - C
+                      reducer:
+                        params: []
+                        type: last
+                      type: query
+                datasource:
+                    type: __expr__
+                    uid: __expr__
+                expression: A
+                intervalMs: 1000
+                maxDataPoints: 43200
+                refId: C
+                type: threshold
+          noDataState: OK
+          execErrState: Error
+          for: 10m
+          keepFiringFor: 5m
+          annotations:
+            description: HPA {{ $labels.horizontalpodautoscaler }} in namespace {{ $labels.namespace }} has been at maximum replicas for more than 10 minutes. Consider increasing max replicas.
+            summary: "🟡 HPA {{ $labels.horizontalpodautoscaler }} at MAX"
+          labels:
+            severity: warning
+          isPaused: false
+          notification_settings:
+            receiver: Email Alerts
+
+    - orgId: 1
+      name: kubernetes-storage-alerts
+      folder: Kubernetes
+      interval: 5m
+      rules:
+        # ============================================
+        # 11. PVC Almost Full - WARNING
+        # ============================================
+        - uid: pvc-almost-full-alert
+          title: PVC Almost Full
+          condition: C
+          data:
+            - refId: A
+              relativeTimeRange:
+                from: 600
+                to: 0
+              datasourceUid: prometheus
+              model:
+                datasource:
+                    type: prometheus
+                    uid: prometheus
+                editorMode: code
+                expr: kubelet_volume_stats_used_bytes / kubelet_volume_stats_capacity_bytes * 100 > 85
+                instant: true
+                intervalMs: 1000
+                legendFormat: __auto
+                maxDataPoints: 43200
+                range: false
+                refId: A
+            - refId: C
+              datasourceUid: __expr__
+              model:
+                conditions:
+                    - evaluator:
+                        params:
+                            - 0
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params:
+                            - C
+                      reducer:
+                        params: []
+                        type: last
+                      type: query
+                datasource:
+                    type: __expr__
+                    uid: __expr__
+                expression: A
+                intervalMs: 1000
+                maxDataPoints: 43200
+                refId: C
+                type: threshold
+          noDataState: OK
+          execErrState: Error
+          for: 5m
+          keepFiringFor: 10m
+          annotations:
+            description: PVC {{ $labels.persistentvolumeclaim }} in namespace {{ $labels.namespace }} is more than 85% full
+            summary: "🟡 PVC {{ $labels.persistentvolumeclaim }} almost full (>85%)"
+          labels:
+            severity: warning
+          isPaused: false
+          notification_settings:
+            receiver: Email Alerts
+
+        # ============================================
+        # 12. PVC Critical - CRITICAL (>95%)
+        # ============================================
+        - uid: pvc-critical-alert
+          title: PVC Critical Full
+          condition: C
+          data:
+            - refId: A
+              relativeTimeRange:
+                from: 600
+                to: 0
+              datasourceUid: prometheus
+              model:
+                datasource:
+                    type: prometheus
+                    uid: prometheus
+                editorMode: code
+                expr: kubelet_volume_stats_used_bytes / kubelet_volume_stats_capacity_bytes * 100 > 95
+                instant: true
+                intervalMs: 1000
+                legendFormat: __auto
+                maxDataPoints: 43200
+                range: false
+                refId: A
+            - refId: C
+              datasourceUid: __expr__
+              model:
+                conditions:
+                    - evaluator:
+                        params:
+                            - 0
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params:
+                            - C
+                      reducer:
+                        params: []
+                        type: last
+                      type: query
+                datasource:
+                    type: __expr__
+                    uid: __expr__
+                expression: A
+                intervalMs: 1000
+                maxDataPoints: 43200
+                refId: C
+                type: threshold
+          noDataState: OK
+          execErrState: Error
+          for: 2m
+          keepFiringFor: 10m
+          annotations:
+            description: "CRITICAL: PVC {{ $labels.persistentvolumeclaim }} in namespace {{ $labels.namespace }} is more than 95% full. Immediate action required!"
+            summary: "🔴 PVC {{ $labels.persistentvolumeclaim }} CRITICAL (>95%)"
+          labels:
+            severity: critical
+          isPaused: false
+          notification_settings:
+            receiver: Email Alerts
+
+    - orgId: 1
+      name: kubernetes-service-alerts
+      folder: Kubernetes
+      interval: 1m
+      rules:
+        # ============================================
+        # 13. Service Endpoint Down - CRITICAL
+        # ============================================
+        - uid: service-down-alert
+          title: Service Endpoint Down
+          condition: C
+          data:
+            - refId: A
+              relativeTimeRange:
+                from: 600
+                to: 0
+              datasourceUid: prometheus
+              model:
+                datasource:
+                    type: prometheus
+                    uid: prometheus
+                editorMode: code
+                expr: kube_endpoint_address_available == 0
+                instant: true
+                intervalMs: 1000
+                legendFormat: __auto
+                maxDataPoints: 43200
+                range: false
+                refId: A
+            - refId: C
+              datasourceUid: __expr__
+              model:
+                conditions:
+                    - evaluator:
+                        params:
+                            - 0
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params:
+                            - C
+                      reducer:
+                        params: []
+                        type: last
+                      type: query
+                datasource:
+                    type: __expr__
+                    uid: __expr__
+                expression: A
+                intervalMs: 1000
+                maxDataPoints: 43200
+                refId: C
+                type: threshold
+          noDataState: OK
+          execErrState: Error
+          for: 2m
+          keepFiringFor: 5m
+          annotations:
+            description: Service {{ $labels.endpoint }} in namespace {{ $labels.namespace }} has no available endpoints
+            summary: "🔴 Service {{ $labels.endpoint }} is DOWN"
+          labels:
+            severity: critical
+          isPaused: false
+          notification_settings:
+            receiver: Email Alerts
+
+        # ============================================
+        # 14. Ingress High Latency - WARNING
+        # ============================================
+        - uid: ingress-latency-alert
+          title: Ingress High Latency
+          condition: C
+          data:
+            - refId: A
+              relativeTimeRange:
+                from: 600
+                to: 0
+              datasourceUid: prometheus
+              model:
+                datasource:
+                    type: prometheus
+                    uid: prometheus
+                editorMode: code
+                expr: histogram_quantile(0.95, sum(rate(nginx_ingress_controller_request_duration_seconds_bucket[5m])) by (le, ingress)) > 2
+                instant: true
+                intervalMs: 1000
+                legendFormat: __auto
+                maxDataPoints: 43200
+                range: false
+                refId: A
+            - refId: C
+              datasourceUid: __expr__
+              model:
+                conditions:
+                    - evaluator:
+                        params:
+                            - 0
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params:
+                            - C
+                      reducer:
+                        params: []
+                        type: last
+                      type: query
+                datasource:
+                    type: __expr__
+                    uid: __expr__
+                expression: A
+                intervalMs: 1000
+                maxDataPoints: 43200
+                refId: C
+                type: threshold
+          noDataState: OK
+          execErrState: Error
+          for: 5m
+          keepFiringFor: 5m
+          annotations:
+            description: Ingress {{ $labels.ingress }} p95 latency is above 2 seconds for more than 5 minutes
+            summary: "🟡 Ingress {{ $labels.ingress }} high latency (>2s)"
+          labels:
+            severity: warning
+          isPaused: false
+          notification_settings:
+            receiver: Email Alerts

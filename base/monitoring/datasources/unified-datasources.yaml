@@ -1,0 +1,29 @@
+# Unified Datasources ConfigMap for Grafana
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-unified-datasources
+  namespace: monitoring
+  labels:
+    grafana_datasource: "1"
+data:
+  datasources.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        uid: prometheus
+        url: http://prometheus-kube-prometheus-prometheus:9090
+        access: proxy
+        isDefault: true
+        editable: false
+      
+      - name: Loki
+        type: loki
+        uid: loki
+        url: http://loki:3100
+        access: proxy
+        isDefault: false
+        editable: false
+        jsonData:
+          maxLines: 1000

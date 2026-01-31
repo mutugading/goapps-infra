@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pgbouncer-config
+  namespace: database
+data:
+  POOL_MODE: "transaction"
+  MAX_CLIENT_CONN: "100"
+  DEFAULT_POOL_SIZE: "20"
+  MIN_POOL_SIZE: "5"
+  RESERVE_POOL_SIZE: "5"
+  SERVER_RESET_QUERY: "DISCARD ALL"
+  LOG_CONNECTIONS: "1"
+  LOG_DISCONNECTIONS: "1"
+  STATS_PERIOD: "60"
