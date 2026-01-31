@@ -1,0 +1,93 @@
+# ============================================================================
+# Helm values for kube-prometheus-stack
+# WITH PERSISTENCE + DASHBOARD/ALERT PROVISIONING
+# ============================================================================
+#
+# Apply with:
+# helm upgrade prometheus prometheus-community/kube-prometheus-stack \
+#   -f prometheus-stack.yaml \
+#   --set grafana.adminPassword="YOUR_PASSWORD" \
+#   --set grafana.assertNoLeakedSecrets=false \
+#   -n monitoring
+#
+# ============================================================================
+
+grafana:
+  # ========================================
+  # PERSISTENCE - Data tidak hilang saat restart
+  # ========================================
+  persistence:
+    enabled: true
+    type: pvc
+    size: 10Gi
+    accessModes:
+      - ReadWriteOnce
+
+  # ========================================
+  # Sub-path configuration
+  # ========================================
+  grafana.ini:
+    server:
+      root_url: "%(protocol)s://%(domain)s/grafana/"
+      serve_from_sub_path: true
+
+  # ========================================
+  # Dashboard Provisioning via ConfigMaps
+  # ========================================
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+      labelValue: "1"
+      folder: /tmp/dashboards
+      searchNamespace: monitoring
+    datasources:
+      enabled: true
+      label: grafana_datasource
+      labelValue: "1"
+      searchNamespace: monitoring
+    alerts:
+      enabled: true
+      label: grafana_alert
+      labelValue: "1"
+      searchNamespace: monitoring
+
+  # ========================================
+  # Default Datasources
+  # ========================================
+  additionalDataSources:
+    - name: Loki
+      type: loki
+      url: http://loki:3100
+      access: proxy
+      isDefault: false
+
+# ========================================
+# Prometheus Configuration
+# ========================================
+prometheus:
+  prometheusSpec:
+    retention: 30d
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 20Gi
+    
+    # Sub-path configuration
+    externalUrl: "/prometheus"
+    routePrefix: "/prometheus"
+    
+    # Auto-discover all ServiceMonitors
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+
+# ========================================
+# Alertmanager Configuration
+# ========================================
+alertmanager:
+  alertmanagerSpec:
+    externalUrl: "https://goapps.mutugading.com/alertmanager"
+    routePrefix: "/alertmanager"

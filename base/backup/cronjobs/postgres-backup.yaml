@@ -1,0 +1,333 @@
+# PostgreSQL Backup CronJobs
+# Schedule: 3x daily (6 AM, 2 PM, 10 PM) + sync to cloud
+# Retention: 7 days local, 7 days cloud
+
+# Backup Scripts ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backup-scripts
+  namespace: database
+data:
+  backup.sh: |
+    #!/bin/bash
+    set -e
+    
+    # Configuration
+    TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+    ENVIRONMENT="${ENVIRONMENT:-staging}"
+    BACKUP_FILE="/backup/${ENVIRONMENT}_goapps_${TIMESTAMP}.sql.gz"
+    
+    echo "[$(date)] Starting PostgreSQL backup..."
+    
+    # Create backup
+    PGPASSWORD="${POSTGRES_PASSWORD}" pg_dump \
+      -h postgres-0.postgres.database.svc.cluster.local \
+      -U postgres \
+      -d goapps \
+      --format=plain \
+      --no-owner \
+      --no-acl | gzip > "${BACKUP_FILE}"
+    
+    echo "[$(date)] Backup created: ${BACKUP_FILE}"
+    echo "[$(date)] Size: $(du -h ${BACKUP_FILE} | cut -f1)"
+    
+    # Upload to MinIO (local)
+    if [ -n "${MINIO_ENDPOINT}" ]; then
+      echo "[$(date)] Uploading to MinIO..."
+      mc alias set minio http://${MINIO_ENDPOINT} ${MINIO_ACCESS_KEY} ${MINIO_SECRET_KEY} --api S3v4
+      mc cp "${BACKUP_FILE}" minio/postgres-backups/
+      echo "[$(date)] Uploaded to MinIO"
+    fi
+    
+    # Upload to Cloud S3 (Backblaze B2)
+    if [ -n "${S3_ENDPOINT}" ]; then
+      echo "[$(date)] Uploading to Cloud S3..."
+      mc alias set cloud https://${S3_ENDPOINT} ${AWS_ACCESS_KEY_ID} ${AWS_SECRET_ACCESS_KEY} --api S3v4
+      mc cp "${BACKUP_FILE}" cloud/${S3_BUCKET}/${ENVIRONMENT}/
+      echo "[$(date)] Uploaded to Cloud S3"
+    fi
+    
+    # Cleanup old local backups (keep 7 days)
+    echo "[$(date)] Cleaning up old backups..."
+    find /backup -name "*.sql.gz" -mtime +7 -delete
+    
+    echo "[$(date)] Backup completed successfully!"
+
+  cleanup-cloud.sh: |
+    #!/bin/bash
+    set -e
+    
+    # Cleanup cloud backups older than 7 days
+    ENVIRONMENT="${ENVIRONMENT:-staging}"
+    
+    if [ -n "${S3_ENDPOINT}" ]; then
+      echo "[$(date)] Cleaning up cloud backups older than 7 days..."
+      mc alias set cloud https://${S3_ENDPOINT} ${AWS_ACCESS_KEY_ID} ${AWS_SECRET_ACCESS_KEY} --api S3v4
+      mc rm --recursive --force --older-than 7d cloud/${S3_BUCKET}/${ENVIRONMENT}/
+      echo "[$(date)] Cloud cleanup completed"
+    fi
+---
+# Morning Backup - 6 AM
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: postgres-backup-morning
+  namespace: database
+spec:
+  schedule: "0 6 * * *"
+  timeZone: "Asia/Jakarta"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: backup
+              image: postgres:18-alpine
+              command: ["/bin/sh", "-c"]
+              args:
+                - |
+                  apk add --no-cache curl bash
+                  curl -o /usr/local/bin/mc https://dl.min.io/client/mc/release/linux-amd64/mc
+                  chmod +x /usr/local/bin/mc
+                  /scripts/backup.sh
+              env:
+                - name: ENVIRONMENT
+                  value: "production"
+                - name: POSTGRES_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: postgres-secret
+                      key: POSTGRES_PASSWORD
+                - name: MINIO_ENDPOINT
+                  value: "minio.minio:9000"
+                - name: MINIO_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: minio-secret
+                      key: MINIO_ROOT_USER
+                      optional: true
+                - name: MINIO_SECRET_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: minio-secret
+                      key: MINIO_ROOT_PASSWORD
+                      optional: true
+                - name: S3_ENDPOINT
+                  valueFrom:
+                    secretKeyRef:
+                      name: s3-cloud-credentials
+                      key: S3_ENDPOINT
+                      optional: true
+                - name: S3_BUCKET
+                  valueFrom:
+                    secretKeyRef:
+                      name: s3-cloud-credentials
+                      key: S3_BUCKET
+                      optional: true
+                - name: AWS_ACCESS_KEY_ID
+                  valueFrom:
+                    secretKeyRef:
+                      name: s3-cloud-credentials
+                      key: AWS_ACCESS_KEY_ID
+                      optional: true
+                - name: AWS_SECRET_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: s3-cloud-credentials
+                      key: AWS_SECRET_ACCESS_KEY
+                      optional: true
+              volumeMounts:
+                - name: backup-storage
+                  mountPath: /backup
+                - name: backup-scripts
+                  mountPath: /scripts
+          volumes:
+            - name: backup-storage
+              hostPath:
+                path: /mnt/goapps-backup/postgres
+                type: DirectoryOrCreate
+            - name: backup-scripts
+              configMap:
+                name: backup-scripts
+                defaultMode: 0755
+---
+# Afternoon Backup - 2 PM
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: postgres-backup-afternoon
+  namespace: database
+spec:
+  schedule: "0 14 * * *"
+  timeZone: "Asia/Jakarta"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: backup
+              image: postgres:18-alpine
+              command: ["/bin/sh", "-c"]
+              args:
+                - |
+                  apk add --no-cache curl bash
+                  curl -o /usr/local/bin/mc https://dl.min.io/client/mc/release/linux-amd64/mc
+                  chmod +x /usr/local/bin/mc
+                  /scripts/backup.sh
+              env:
+                - name: ENVIRONMENT
+                  value: "production"
+                - name: POSTGRES_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: postgres-secret
+                      key: POSTGRES_PASSWORD
+                - name: MINIO_ENDPOINT
+                  value: "minio.minio:9000"
+                - name: MINIO_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: minio-secret
+                      key: MINIO_ROOT_USER
+                      optional: true
+                - name: MINIO_SECRET_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: minio-secret
+                      key: MINIO_ROOT_PASSWORD
+                      optional: true
+                - name: S3_ENDPOINT
+                  valueFrom:
+                    secretKeyRef:
+                      name: s3-cloud-credentials
+                      key: S3_ENDPOINT
+                      optional: true
+                - name: S3_BUCKET
+                  valueFrom:
+                    secretKeyRef:
+                      name: s3-cloud-credentials
+                      key: S3_BUCKET
+                      optional: true
+                - name: AWS_ACCESS_KEY_ID
+                  valueFrom:
+                    secretKeyRef:
+                      name: s3-cloud-credentials
+                      key: AWS_ACCESS_KEY_ID
+                      optional: true
+                - name: AWS_SECRET_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: s3-cloud-credentials
+                      key: AWS_SECRET_ACCESS_KEY
+                      optional: true
+              volumeMounts:
+                - name: backup-storage
+                  mountPath: /backup
+                - name: backup-scripts
+                  mountPath: /scripts
+          volumes:
+            - name: backup-storage
+              hostPath:
+                path: /mnt/goapps-backup/postgres
+                type: DirectoryOrCreate
+            - name: backup-scripts
+              configMap:
+                name: backup-scripts
+                defaultMode: 0755
+---
+# Night Backup - 10 PM
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: postgres-backup-night
+  namespace: database
+spec:
+  schedule: "0 22 * * *"
+  timeZone: "Asia/Jakarta"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: backup
+              image: postgres:18-alpine
+              command: ["/bin/sh", "-c"]
+              args:
+                - |
+                  apk add --no-cache curl bash
+                  curl -o /usr/local/bin/mc https://dl.min.io/client/mc/release/linux-amd64/mc
+                  chmod +x /usr/local/bin/mc
+                  /scripts/backup.sh
+              env:
+                - name: ENVIRONMENT
+                  value: "production"
+                - name: POSTGRES_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: postgres-secret
+                      key: POSTGRES_PASSWORD
+                - name: MINIO_ENDPOINT
+                  value: "minio.minio:9000"
+                - name: MINIO_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: minio-secret
+                      key: MINIO_ROOT_USER
+                      optional: true
+                - name: MINIO_SECRET_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: minio-secret
+                      key: MINIO_ROOT_PASSWORD
+                      optional: true
+                - name: S3_ENDPOINT
+                  valueFrom:
+                    secretKeyRef:
+                      name: s3-cloud-credentials
+                      key: S3_ENDPOINT
+                      optional: true
+                - name: S3_BUCKET
+                  valueFrom:
+                    secretKeyRef:
+                      name: s3-cloud-credentials
+                      key: S3_BUCKET
+                      optional: true
+                - name: AWS_ACCESS_KEY_ID
+                  valueFrom:
+                    secretKeyRef:
+                      name: s3-cloud-credentials
+                      key: AWS_ACCESS_KEY_ID
+                      optional: true
+                - name: AWS_SECRET_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: s3-cloud-credentials
+                      key: AWS_SECRET_ACCESS_KEY
+                      optional: true
+              volumeMounts:
+                - name: backup-storage
+                  mountPath: /backup
+                - name: backup-scripts
+                  mountPath: /scripts
+          volumes:
+            - name: backup-storage
+              hostPath:
+                path: /mnt/goapps-backup/postgres
+                type: DirectoryOrCreate
+            - name: backup-scripts
+              configMap:
+                name: backup-scripts
+                defaultMode: 0755

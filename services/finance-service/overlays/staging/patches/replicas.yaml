@@ -1,0 +1,7 @@
+# Staging: Single replica
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: finance-service
+spec:
+  replicas: 1

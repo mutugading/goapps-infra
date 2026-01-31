@@ -1,0 +1,268 @@
+# ============================================================================
+# Alert Rules ConfigMap - Auto-provisioned by Grafana Sidecar
+# ============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-alert-rules
+  namespace: monitoring
+  labels:
+    grafana_alert: "1"
+data:
+  alert-rules.yaml: |
+    apiVersion: 1
+    groups:
+      - orgId: 1
+        name: kubernetes-alerts
+        folder: Kubernetes
+        interval: 1m
+        rules:
+          # ============================================
+          # 1. Pod CrashLoopBackOff - CRITICAL
+          # ============================================
+          - uid: pod-crash-alert
+            title: Pod CrashLoopBackOff
+            condition: C
+            data:
+              - refId: A
+                relativeTimeRange:
+                  from: 600
+                  to: 0
+                datasourceUid: prometheus
+                model:
+                  editorMode: code
+                  expr: kube_pod_container_status_waiting_reason{reason="CrashLoopBackOff"} > 0
+                  instant: true
+                  intervalMs: 1000
+                  maxDataPoints: 43200
+                  refId: A
+              - refId: C
+                datasourceUid: __expr__
+                model:
+                  conditions:
+                    - evaluator:
+                        params: [0]
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params: [C]
+                      reducer:
+                        params: []
+                        type: last
+                      type: query
+                  expression: A
+                  intervalMs: 1000
+                  maxDataPoints: 43200
+                  refId: C
+                  type: threshold
+            noDataState: OK
+            execErrState: Error
+            for: 2m
+            keepFiringFor: 5m
+            annotations:
+              description: Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} is in CrashLoopBackOff
+              summary: "🔴 Pod {{ $labels.pod }} is CRASHING"
+            labels:
+              severity: critical
+            isPaused: false
+
+          # ============================================
+          # 2. Pod High CPU Usage - WARNING
+          # ============================================
+          - uid: pod-high-cpu-alert
+            title: Pod High CPU Usage
+            condition: C
+            data:
+              - refId: A
+                relativeTimeRange:
+                  from: 600
+                  to: 0
+                datasourceUid: prometheus
+                model:
+                  editorMode: code
+                  expr: sum(rate(container_cpu_usage_seconds_total{container!="", container!="POD"}[5m])) by (namespace, pod) * 100 > 80
+                  instant: true
+                  intervalMs: 1000
+                  maxDataPoints: 43200
+                  refId: A
+              - refId: C
+                datasourceUid: __expr__
+                model:
+                  conditions:
+                    - evaluator:
+                        params: [0]
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params: [C]
+                      reducer:
+                        params: []
+                        type: last
+                      type: query
+                  expression: A
+                  intervalMs: 1000
+                  maxDataPoints: 43200
+                  refId: C
+                  type: threshold
+            noDataState: OK
+            execErrState: Error
+            for: 5m
+            keepFiringFor: 5m
+            annotations:
+              description: Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} CPU usage is above 80%
+              summary: "🟡 High CPU on Pod {{ $labels.pod }}"
+            labels:
+              severity: warning
+            isPaused: false
+
+          # ============================================
+          # 3. Pod Frequent Restarts - WARNING
+          # ============================================
+          - uid: pod-restart-alert
+            title: Pod Frequent Restarts
+            condition: C
+            data:
+              - refId: A
+                relativeTimeRange:
+                  from: 3600
+                  to: 0
+                datasourceUid: prometheus
+                model:
+                  editorMode: code
+                  expr: increase(kube_pod_container_status_restarts_total[1h]) > 3
+                  instant: true
+                  intervalMs: 1000
+                  maxDataPoints: 43200
+                  refId: A
+              - refId: C
+                datasourceUid: __expr__
+                model:
+                  conditions:
+                    - evaluator:
+                        params: [0]
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params: [C]
+                      reducer:
+                        params: []
+                        type: last
+                      type: query
+                  expression: A
+                  intervalMs: 1000
+                  maxDataPoints: 43200
+                  refId: C
+                  type: threshold
+            noDataState: OK
+            execErrState: Error
+            for: 1m
+            keepFiringFor: 5m
+            annotations:
+              description: Pod {{ $labels.pod }} has restarted more than 3 times in the last hour
+              summary: "🟡 Pod {{ $labels.pod }} frequent restarts"
+            labels:
+              severity: warning
+            isPaused: false
+
+          # ============================================
+          # 4. HPA at Maximum - WARNING
+          # ============================================
+          - uid: hpa-maxed-alert
+            title: HPA at Maximum Replicas
+            condition: C
+            data:
+              - refId: A
+                relativeTimeRange:
+                  from: 600
+                  to: 0
+                datasourceUid: prometheus
+                model:
+                  editorMode: code
+                  expr: kube_horizontalpodautoscaler_status_current_replicas == kube_horizontalpodautoscaler_spec_max_replicas
+                  instant: true
+                  intervalMs: 1000
+                  maxDataPoints: 43200
+                  refId: A
+              - refId: C
+                datasourceUid: __expr__
+                model:
+                  conditions:
+                    - evaluator:
+                        params: [0]
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params: [C]
+                      reducer:
+                        params: []
+                        type: last
+                      type: query
+                  expression: A
+                  intervalMs: 1000
+                  maxDataPoints: 43200
+                  refId: C
+                  type: threshold
+            noDataState: OK
+            execErrState: Error
+            for: 10m
+            keepFiringFor: 5m
+            annotations:
+              description: HPA {{ $labels.horizontalpodautoscaler }} has been at maximum replicas for 10+ minutes
+              summary: "🟡 HPA {{ $labels.horizontalpodautoscaler }} at MAX"
+            labels:
+              severity: warning
+            isPaused: false
+
+          # ============================================
+          # 5. Deployment Unavailable - CRITICAL
+          # ============================================
+          - uid: deployment-unavailable-alert
+            title: Deployment Unavailable Replicas
+            condition: C
+            data:
+              - refId: A
+                relativeTimeRange:
+                  from: 600
+                  to: 0
+                datasourceUid: prometheus
+                model:
+                  editorMode: code
+                  expr: kube_deployment_status_replicas_unavailable > 0
+                  instant: true
+                  intervalMs: 1000
+                  maxDataPoints: 43200
+                  refId: A
+              - refId: C
+                datasourceUid: __expr__
+                model:
+                  conditions:
+                    - evaluator:
+                        params: [0]
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params: [C]
+                      reducer:
+                        params: []
+                        type: last
+                      type: query
+                  expression: A
+                  intervalMs: 1000
+                  maxDataPoints: 43200
+                  refId: C
+                  type: threshold
+            noDataState: OK
+            execErrState: Error
+            for: 5m
+            keepFiringFor: 5m
+            annotations:
+              description: Deployment {{ $labels.deployment }} has unavailable replicas
+              summary: "🔴 Deployment {{ $labels.deployment }} has unavailable replicas"
+            labels:
+              severity: critical
+            isPaused: false

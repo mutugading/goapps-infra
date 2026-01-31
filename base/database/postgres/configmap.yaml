@@ -1,0 +1,67 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-config
+  namespace: database
+  labels:
+    app: postgres
+data:
+  # PostgreSQL configuration tuning
+  postgresql.conf: |
+    # Connection Settings
+    listen_addresses = '*'
+    max_connections = 100
+    
+    # Memory Settings (adjust based on available RAM)
+    shared_buffers = 256MB
+    effective_cache_size = 768MB
+    work_mem = 4MB
+    maintenance_work_mem = 64MB
+    
+    # WAL Settings
+    wal_buffers = 16MB
+    checkpoint_completion_target = 0.9
+    
+    # Query Planner
+    random_page_cost = 1.1
+    effective_io_concurrency = 200
+    
+    # Logging
+    log_timezone = 'Asia/Jakarta'
+    log_statement = 'ddl'
+    log_min_duration_statement = 1000
+    
+    # Locale
+    timezone = 'Asia/Jakarta'
+    datestyle = 'iso, mdy'
+    lc_messages = 'en_US.utf8'
+    lc_monetary = 'en_US.utf8'
+    lc_numeric = 'en_US.utf8'
+    lc_time = 'en_US.utf8'
+    default_text_search_config = 'pg_catalog.english'
+
+  # Schema initialization script
+  init-schemas.sql: |
+    -- Create schemas for microservices
+    CREATE SCHEMA IF NOT EXISTS export;
+    CREATE SCHEMA IF NOT EXISTS auth;
+    CREATE SCHEMA IF NOT EXISTS hr;
+    CREATE SCHEMA IF NOT EXISTS finance;
+    
+    -- Grant usage to postgres user (default)
+    GRANT ALL PRIVILEGES ON SCHEMA export TO postgres;
+    GRANT ALL PRIVILEGES ON SCHEMA auth TO postgres;
+    GRANT ALL PRIVILEGES ON SCHEMA hr TO postgres;
+    GRANT ALL PRIVILEGES ON SCHEMA finance TO postgres;
+    
+    -- For future service-specific users:
+    -- CREATE USER export_user WITH PASSWORD 'xxx';
+    -- GRANT USAGE ON SCHEMA export TO export_user;
+    -- GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA export TO export_user;
+    -- ALTER DEFAULT PRIVILEGES IN SCHEMA export GRANT ALL ON TABLES TO export_user;
+    
+    -- Log successful initialization
+    DO $$
+    BEGIN
+      RAISE NOTICE 'Schemas initialized: export, auth, hr, finance';
+    END $$;

@@ -1,0 +1,258 @@
+# PostgreSQL Alerts for Grafana/Prometheus
+# Apply to monitoring namespace
+#
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-alerts
+  namespace: monitoring
+  labels:
+    grafana_alert: "1"
+data:
+  postgres-alerts.yaml: |
+    apiVersion: 1
+    groups:
+      - orgId: 1
+        name: PostgreSQL Alerts
+        folder: Database
+        interval: 1m
+        rules:
+          - uid: postgres-down
+            title: PostgreSQL Down
+            condition: C
+            data:
+              - refId: A
+                relativeTimeRange:
+                  from: 300
+                  to: 0
+                datasourceUid: prometheus
+                model:
+                  expr: pg_up == 0
+                  refId: A
+              - refId: C
+                relativeTimeRange:
+                  from: 0
+                  to: 0
+                datasourceUid: __expr__
+                model:
+                  conditions:
+                    - evaluator:
+                        params: [0]
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params: [A]
+                      reducer:
+                        type: last
+                  refId: C
+                  type: classic_conditions
+            noDataState: OK
+            execErrState: Error
+            for: 2m
+            annotations:
+              summary: PostgreSQL database is down
+              description: PostgreSQL exporter is not responding
+            labels:
+              severity: critical
+            isPaused: false
+
+          - uid: postgres-high-connections
+            title: PostgreSQL High Connection Usage
+            condition: C
+            data:
+              - refId: A
+                relativeTimeRange:
+                  from: 300
+                  to: 0
+                datasourceUid: prometheus
+                model:
+                  expr: sum(pg_stat_database_numbackends) / max(pg_settings_max_connections) * 100 > 80
+                  refId: A
+              - refId: C
+                relativeTimeRange:
+                  from: 0
+                  to: 0
+                datasourceUid: __expr__
+                model:
+                  conditions:
+                    - evaluator:
+                        params: [0]
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params: [A]
+                      reducer:
+                        type: last
+                  refId: C
+                  type: classic_conditions
+            noDataState: OK
+            execErrState: Error
+            for: 5m
+            annotations:
+              summary: PostgreSQL connection usage above 80%
+              description: Database connections are running high
+            labels:
+              severity: warning
+            isPaused: false
+
+          - uid: postgres-long-queries
+            title: PostgreSQL Long Running Queries
+            condition: C
+            data:
+              - refId: A
+                relativeTimeRange:
+                  from: 300
+                  to: 0
+                datasourceUid: prometheus
+                model:
+                  expr: max(pg_stat_activity_max_tx_duration{state="active"}) > 300
+                  refId: A
+              - refId: C
+                relativeTimeRange:
+                  from: 0
+                  to: 0
+                datasourceUid: __expr__
+                model:
+                  conditions:
+                    - evaluator:
+                        params: [0]
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params: [A]
+                      reducer:
+                        type: last
+                  refId: C
+                  type: classic_conditions
+            noDataState: OK
+            execErrState: Error
+            for: 5m
+            annotations:
+              summary: PostgreSQL query running longer than 5 minutes
+              description: There are queries running for more than 5 minutes
+            labels:
+              severity: warning
+            isPaused: false
+
+          - uid: postgres-deadlocks
+            title: PostgreSQL Deadlocks Detected
+            condition: C
+            data:
+              - refId: A
+                relativeTimeRange:
+                  from: 300
+                  to: 0
+                datasourceUid: prometheus
+                model:
+                  expr: increase(pg_stat_database_deadlocks{datname="goapps"}[5m]) > 0
+                  refId: A
+              - refId: C
+                relativeTimeRange:
+                  from: 0
+                  to: 0
+                datasourceUid: __expr__
+                model:
+                  conditions:
+                    - evaluator:
+                        params: [0]
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params: [A]
+                      reducer:
+                        type: last
+                  refId: C
+                  type: classic_conditions
+            noDataState: OK
+            execErrState: Error
+            for: 0s
+            annotations:
+              summary: PostgreSQL deadlocks detected
+              description: Database deadlocks have occurred
+            labels:
+              severity: warning
+            isPaused: false
+
+          - uid: pgbouncer-down
+            title: PgBouncer Down
+            condition: C
+            data:
+              - refId: A
+                relativeTimeRange:
+                  from: 300
+                  to: 0
+                datasourceUid: prometheus
+                model:
+                  expr: kube_deployment_status_replicas_available{namespace="database",deployment="pgbouncer"} == 0
+                  refId: A
+              - refId: C
+                relativeTimeRange:
+                  from: 0
+                  to: 0
+                datasourceUid: __expr__
+                model:
+                  conditions:
+                    - evaluator:
+                        params: [0]
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params: [A]
+                      reducer:
+                        type: last
+                  refId: C
+                  type: classic_conditions
+            noDataState: OK
+            execErrState: Error
+            for: 2m
+            annotations:
+              summary: PgBouncer is down
+              description: No PgBouncer replicas are available
+            labels:
+              severity: critical
+            isPaused: false
+
+          - uid: backup-failed
+            title: PostgreSQL Backup Failed
+            condition: C
+            data:
+              - refId: A
+                relativeTimeRange:
+                  from: 86400
+                  to: 0
+                datasourceUid: prometheus
+                model:
+                  expr: kube_job_status_failed{namespace="database",job_name=~"postgres-backup.*"} > 0
+                  refId: A
+              - refId: C
+                relativeTimeRange:
+                  from: 0
+                  to: 0
+                datasourceUid: __expr__
+                model:
+                  conditions:
+                    - evaluator:
+                        params: [0]
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params: [A]
+                      reducer:
+                        type: last
+                  refId: C
+                  type: classic_conditions
+            noDataState: OK
+            execErrState: Error
+            for: 0s
+            annotations:
+              summary: PostgreSQL backup job failed
+              description: A scheduled backup job has failed
+            labels:
+              severity: critical
+            isPaused: false

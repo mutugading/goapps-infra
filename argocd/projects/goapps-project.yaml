@@ -1,0 +1,37 @@
+# ArgoCD Project for Go Apps
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: goapps
+  namespace: argocd
+spec:
+  description: Go Apps Microservices Platform
+
+  # Source repositories allowed
+  sourceRepos:
+    - 'https://github.com/mutugading/goapps-infra.git'
+    - 'https://github.com/mutugading/goapps-backend.git'
+
+  # Destination clusters and namespaces
+  destinations:
+    - namespace: '*'
+      server: https://kubernetes.default.svc
+
+  # Cluster resources allowed
+  clusterResourceWhitelist:
+    - group: '*'
+      kind: '*'
+
+  # Namespace resources allowed
+  namespaceResourceWhitelist:
+    - group: '*'
+      kind: '*'
+
+  # Roles (optional)
+  roles:
+    - name: admin
+      description: Full access to goapps project
+      policies:
+        - p, proj:goapps:admin, applications, *, goapps/*, allow
+      groups:
+        - goapps-admins

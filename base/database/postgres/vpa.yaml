@@ -1,0 +1,24 @@
+# PostgreSQL VPA - Recommendation Mode Only
+# Does not auto-apply to avoid database restarts
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: postgres-vpa
+  namespace: database
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: StatefulSet
+    name: postgres
+  updatePolicy:
+    updateMode: "Off"  # Recommendations only, no auto-apply
+  resourcePolicy:
+    containerPolicies:
+      - containerName: postgres
+        minAllowed:
+          cpu: "100m"
+          memory: "256Mi"
+        maxAllowed:
+          cpu: "2000m"
+          memory: "4Gi"
+        controlledResources: ["cpu", "memory"]

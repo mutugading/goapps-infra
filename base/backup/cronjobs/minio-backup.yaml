@@ -1,0 +1,80 @@
+# MinIO Backup to VPS Disk ONLY
+# NOT to Backblaze (free tier storage limit)
+# Schedule: Daily at 3 AM
+# Retention: 7 days
+
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: minio-backup-to-disk
+  namespace: database
+spec:
+  schedule: "0 3 * * *"
+  timeZone: "Asia/Jakarta"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: minio-backup
+              image: minio/mc:latest
+              command: ["/bin/sh", "-c"]
+              args:
+                - |
+                  set -e
+                  ENVIRONMENT="${ENVIRONMENT:-production}"
+                  TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+                  
+                  echo "[$(date)] Starting MinIO backup to VPS disk..."
+                  
+                  # Configure MinIO alias (source)
+                  mc alias set minio http://${MINIO_ENDPOINT} ${MINIO_ACCESS_KEY} ${MINIO_SECRET_KEY} --api S3v4
+                  
+                  # Backup buckets to VPS disk
+                  BUCKETS="postgres-backups export-files"
+                  
+                  for bucket in $BUCKETS; do
+                    if mc ls minio/${bucket} &>/dev/null; then
+                      echo "[$(date)] Backing up bucket: ${bucket}"
+                      mc mirror --overwrite minio/${bucket} /backup/minio/${bucket}/
+                    else
+                      echo "[$(date)] Bucket ${bucket} not found, skipping..."
+                    fi
+                  done
+                  
+                  # Cleanup old backups (7 days)
+                  echo "[$(date)] Cleaning up backups older than 7 days..."
+                  find /backup/minio -type f -mtime +7 -delete 2>/dev/null || true
+                  
+                  # Show backup size
+                  echo "[$(date)] Backup size:"
+                  du -sh /backup/minio/
+                  
+                  echo "[$(date)] MinIO backup to disk completed!"
+              env:
+                - name: ENVIRONMENT
+                  value: "production"
+                - name: MINIO_ENDPOINT
+                  value: "minio.minio:9000"
+                - name: MINIO_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: minio-secret
+                      key: MINIO_ROOT_USER
+                - name: MINIO_SECRET_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: minio-secret
+                      key: MINIO_ROOT_PASSWORD
+              volumeMounts:
+                - name: backup-storage
+                  mountPath: /backup
+          volumes:
+            - name: backup-storage
+              hostPath:
+                path: /mnt/goapps-backup
+                type: DirectoryOrCreate
