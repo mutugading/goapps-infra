@@ -1,0 +1,98 @@
+# ============================================================================
+# Combined Ingress - Path-Based Routing with TLS + Auth (PRODUCTION)
+# ============================================================================
+# 
+# Akses via HTTPS:
+# - Grafana:    https://goapps.mutugading.com/grafana
+# - Prometheus: https://goapps.mutugading.com/prometheus (with Basic Auth)
+# - ArgoCD:     https://goapps.mutugading.com/argocd
+# ============================================================================
+
+---
+# Grafana Ingress
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: grafana-ingress
+  namespace: monitoring
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - goapps.mutugading.com
+      secretName: goapps-tls
+  rules:
+    - host: goapps.mutugading.com
+      http:
+        paths:
+          - path: /grafana(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: prometheus-grafana
+                port:
+                  number: 80
+
+---
+# Prometheus Ingress (with Basic Auth for Production)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: prometheus-ingress
+  namespace: monitoring
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    # Basic Auth untuk Prometheus di Production
+    nginx.ingress.kubernetes.io/auth-type: basic
+    nginx.ingress.kubernetes.io/auth-secret: prometheus-basic-auth
+    nginx.ingress.kubernetes.io/auth-realm: "Authentication Required - Prometheus"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - goapps.mutugading.com
+      secretName: goapps-tls
+  rules:
+    - host: goapps.mutugading.com
+      http:
+        paths:
+          - path: /prometheus
+            pathType: Prefix
+            backend:
+              service:
+                name: prometheus-kube-prometheus-prometheus
+                port:
+                  number: 9090
+
+---
+# ArgoCD Ingress
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: argocd-ingress
+  namespace: argocd
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - goapps.mutugading.com
+      secretName: goapps-tls
+  rules:
+    - host: goapps.mutugading.com
+      http:
+        paths:
+          - path: /argocd
+            pathType: Prefix
+            backend:
+              service:
+                name: argocd-server
+                port:
+                  number: 443

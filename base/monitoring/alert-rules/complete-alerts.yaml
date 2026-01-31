@@ -1,0 +1,736 @@
+# Complete Alert Rules ConfigMap
+# Auto-provisioned by Grafana Sidecar (label: grafana_alert: "1")
+# Total: 25+ alerts across all categories
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: complete-alert-rules
+  namespace: monitoring
+  labels:
+    grafana_alert: "1"
+data:
+  complete-alerts.yaml: |
+    apiVersion: 1
+    groups:
+      # ============================================
+      # NODE ALERTS
+      # ============================================
+      - orgId: 1
+        name: Node Alerts
+        folder: Infrastructure
+        interval: 1m
+        rules:
+          - uid: node-high-cpu
+            title: Node High CPU Usage
+            condition: C
+            data:
+              - refId: A
+                relativeTimeRange:
+                  from: 600
+                  to: 0
+                datasourceUid: prometheus
+                model:
+                  expr: 100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 85
+                  refId: A
+              - refId: C
+                datasourceUid: __expr__
+                model:
+                  conditions:
+                    - evaluator:
+                        params: [0]
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params: [A]
+                      reducer:
+                        type: last
+                  refId: C
+                  type: classic_conditions
+            noDataState: OK
+            execErrState: Error
+            for: 5m
+            annotations:
+              summary: "Node CPU usage is above 85%"
+              description: "Node {{ $labels.instance }} has high CPU usage"
+            labels:
+              severity: warning
+            isPaused: false
+
+          - uid: node-high-memory
+            title: Node High Memory Usage
+            condition: C
+            data:
+              - refId: A
+                relativeTimeRange:
+                  from: 600
+                  to: 0
+                datasourceUid: prometheus
+                model:
+                  expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 85
+                  refId: A
+              - refId: C
+                datasourceUid: __expr__
+                model:
+                  conditions:
+                    - evaluator:
+                        params: [0]
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params: [A]
+                      reducer:
+                        type: last
+                  refId: C
+                  type: classic_conditions
+            noDataState: OK
+            execErrState: Error
+            for: 5m
+            annotations:
+              summary: "Node memory usage is above 85%"
+              description: "Node {{ $labels.instance }} has high memory usage"
+            labels:
+              severity: warning
+            isPaused: false
+
+          - uid: node-disk-full
+            title: Node Disk Almost Full
+            condition: C
+            data:
+              - refId: A
+                relativeTimeRange:
+                  from: 600
+                  to: 0
+                datasourceUid: prometheus
+                model:
+                  expr: (1 - (node_filesystem_avail_bytes{fstype!~"tmpfs|overlay"} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay"})) * 100 > 85
+                  refId: A
+              - refId: C
+                datasourceUid: __expr__
+                model:
+                  conditions:
+                    - evaluator:
+                        params: [0]
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params: [A]
+                      reducer:
+                        type: last
+                  refId: C
+                  type: classic_conditions
+            noDataState: OK
+            execErrState: Error
+            for: 5m
+            annotations:
+              summary: "Node disk usage is above 85%"
+              description: "Disk {{ $labels.device }} on {{ $labels.instance }} is almost full"
+            labels:
+              severity: critical
+            isPaused: false
+
+      # ============================================
+      # POD ALERTS
+      # ============================================
+      - orgId: 1
+        name: Pod Alerts
+        folder: Kubernetes
+        interval: 1m
+        rules:
+          - uid: pod-crashloop
+            title: Pod CrashLoopBackOff
+            condition: C
+            data:
+              - refId: A
+                relativeTimeRange:
+                  from: 600
+                  to: 0
+                datasourceUid: prometheus
+                model:
+                  expr: kube_pod_container_status_waiting_reason{reason="CrashLoopBackOff"} > 0
+                  refId: A
+              - refId: C
+                datasourceUid: __expr__
+                model:
+                  conditions:
+                    - evaluator:
+                        params: [0]
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params: [A]
+                      reducer:
+                        type: last
+                  refId: C
+                  type: classic_conditions
+            noDataState: OK
+            execErrState: Error
+            for: 2m
+            annotations:
+              summary: "🔴 Pod {{ $labels.pod }} is CRASHING"
+              description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} is in CrashLoopBackOff"
+            labels:
+              severity: critical
+            isPaused: false
+
+          - uid: pod-pending
+            title: Pod Stuck Pending
+            condition: C
+            data:
+              - refId: A
+                relativeTimeRange:
+                  from: 600
+                  to: 0
+                datasourceUid: prometheus
+                model:
+                  expr: kube_pod_status_phase{phase="Pending"} == 1
+                  refId: A
+              - refId: C
+                datasourceUid: __expr__
+                model:
+                  conditions:
+                    - evaluator:
+                        params: [0]
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params: [A]
+                      reducer:
+                        type: last
+                  refId: C
+                  type: classic_conditions
+            noDataState: OK
+            execErrState: Error
+            for: 10m
+            annotations:
+              summary: "Pod {{ $labels.pod }} is stuck Pending"
+              description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} has been Pending for more than 10 minutes"
+            labels:
+              severity: warning
+            isPaused: false
+
+          - uid: pod-oomkilled
+            title: Pod OOMKilled
+            condition: C
+            data:
+              - refId: A
+                relativeTimeRange:
+                  from: 600
+                  to: 0
+                datasourceUid: prometheus
+                model:
+                  expr: kube_pod_container_status_last_terminated_reason{reason="OOMKilled"} > 0
+                  refId: A
+              - refId: C
+                datasourceUid: __expr__
+                model:
+                  conditions:
+                    - evaluator:
+                        params: [0]
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params: [A]
+                      reducer:
+                        type: last
+                  refId: C
+                  type: classic_conditions
+            noDataState: OK
+            execErrState: Error
+            for: 0s
+            annotations:
+              summary: "🔴 Pod {{ $labels.pod }} was OOMKilled"
+              description: "Container {{ $labels.container }} in pod {{ $labels.pod }} was killed due to Out of Memory"
+            labels:
+              severity: critical
+            isPaused: false
+
+          - uid: pod-high-restarts
+            title: Pod Frequent Restarts
+            condition: C
+            data:
+              - refId: A
+                relativeTimeRange:
+                  from: 3600
+                  to: 0
+                datasourceUid: prometheus
+                model:
+                  expr: increase(kube_pod_container_status_restarts_total[1h]) > 3
+                  refId: A
+              - refId: C
+                datasourceUid: __expr__
+                model:
+                  conditions:
+                    - evaluator:
+                        params: [0]
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params: [A]
+                      reducer:
+                        type: last
+                  refId: C
+                  type: classic_conditions
+            noDataState: OK
+            execErrState: Error
+            for: 1m
+            annotations:
+              summary: "🟡 Pod {{ $labels.pod }} frequent restarts"
+              description: "Pod {{ $labels.pod }} has restarted more than 3 times in the last hour"
+            labels:
+              severity: warning
+            isPaused: false
+
+          - uid: pod-high-cpu
+            title: Pod High CPU Usage
+            condition: C
+            data:
+              - refId: A
+                relativeTimeRange:
+                  from: 600
+                  to: 0
+                datasourceUid: prometheus
+                model:
+                  expr: sum(rate(container_cpu_usage_seconds_total{container!="", container!="POD"}[5m])) by (namespace, pod) * 100 > 80
+                  refId: A
+              - refId: C
+                datasourceUid: __expr__
+                model:
+                  conditions:
+                    - evaluator:
+                        params: [0]
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params: [A]
+                      reducer:
+                        type: last
+                  refId: C
+                  type: classic_conditions
+            noDataState: OK
+            execErrState: Error
+            for: 5m
+            annotations:
+              summary: "🟡 High CPU on Pod {{ $labels.pod }}"
+              description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} CPU usage is above 80%"
+            labels:
+              severity: warning
+            isPaused: false
+
+      # ============================================
+      # DEPLOYMENT ALERTS
+      # ============================================
+      - orgId: 1
+        name: Deployment Alerts
+        folder: Kubernetes
+        interval: 1m
+        rules:
+          - uid: deployment-unavailable
+            title: Deployment Has Unavailable Replicas
+            condition: C
+            data:
+              - refId: A
+                relativeTimeRange:
+                  from: 600
+                  to: 0
+                datasourceUid: prometheus
+                model:
+                  expr: kube_deployment_status_replicas_unavailable > 0
+                  refId: A
+              - refId: C
+                datasourceUid: __expr__
+                model:
+                  conditions:
+                    - evaluator:
+                        params: [0]
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params: [A]
+                      reducer:
+                        type: last
+                  refId: C
+                  type: classic_conditions
+            noDataState: OK
+            execErrState: Error
+            for: 5m
+            annotations:
+              summary: "🔴 Deployment {{ $labels.deployment }} has unavailable replicas"
+              description: "Deployment {{ $labels.deployment }} in namespace {{ $labels.namespace }} has unavailable replicas"
+            labels:
+              severity: critical
+            isPaused: false
+
+          - uid: deployment-generation-mismatch
+            title: Deployment Rollout Stuck
+            condition: C
+            data:
+              - refId: A
+                relativeTimeRange:
+                  from: 600
+                  to: 0
+                datasourceUid: prometheus
+                model:
+                  expr: kube_deployment_status_observed_generation != kube_deployment_metadata_generation
+                  refId: A
+              - refId: C
+                datasourceUid: __expr__
+                model:
+                  conditions:
+                    - evaluator:
+                        params: [0]
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params: [A]
+                      reducer:
+                        type: last
+                  refId: C
+                  type: classic_conditions
+            noDataState: OK
+            execErrState: Error
+            for: 10m
+            annotations:
+              summary: "Deployment {{ $labels.deployment }} rollout stuck"
+              description: "Deployment {{ $labels.deployment }} generation mismatch for more than 10 minutes"
+            labels:
+              severity: warning
+            isPaused: false
+
+      # ============================================
+      # HPA ALERTS
+      # ============================================
+      - orgId: 1
+        name: HPA Alerts
+        folder: Kubernetes
+        interval: 1m
+        rules:
+          - uid: hpa-at-max
+            title: HPA at Maximum Replicas
+            condition: C
+            data:
+              - refId: A
+                relativeTimeRange:
+                  from: 600
+                  to: 0
+                datasourceUid: prometheus
+                model:
+                  expr: kube_horizontalpodautoscaler_status_current_replicas == kube_horizontalpodautoscaler_spec_max_replicas
+                  refId: A
+              - refId: C
+                datasourceUid: __expr__
+                model:
+                  conditions:
+                    - evaluator:
+                        params: [0]
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params: [A]
+                      reducer:
+                        type: last
+                  refId: C
+                  type: classic_conditions
+            noDataState: OK
+            execErrState: Error
+            for: 10m
+            annotations:
+              summary: "🟡 HPA {{ $labels.horizontalpodautoscaler }} at MAX"
+              description: "HPA {{ $labels.horizontalpodautoscaler }} has been at maximum replicas for 10+ minutes"
+            labels:
+              severity: warning
+            isPaused: false
+
+      # ============================================
+      # PVC ALERTS
+      # ============================================
+      - orgId: 1
+        name: PVC Alerts
+        folder: Infrastructure
+        interval: 1m
+        rules:
+          - uid: pvc-almost-full
+            title: PVC Almost Full
+            condition: C
+            data:
+              - refId: A
+                relativeTimeRange:
+                  from: 600
+                  to: 0
+                datasourceUid: prometheus
+                model:
+                  expr: (kubelet_volume_stats_used_bytes / kubelet_volume_stats_capacity_bytes) * 100 > 85
+                  refId: A
+              - refId: C
+                datasourceUid: __expr__
+                model:
+                  conditions:
+                    - evaluator:
+                        params: [0]
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params: [A]
+                      reducer:
+                        type: last
+                  refId: C
+                  type: classic_conditions
+            noDataState: OK
+            execErrState: Error
+            for: 5m
+            annotations:
+              summary: "PVC {{ $labels.persistentvolumeclaim }} is almost full"
+              description: "PVC {{ $labels.persistentvolumeclaim }} in namespace {{ $labels.namespace }} is above 85% capacity"
+            labels:
+              severity: critical
+            isPaused: false
+
+      # ============================================
+      # DATABASE ALERTS
+      # ============================================
+      - orgId: 1
+        name: Database Alerts
+        folder: Database
+        interval: 1m
+        rules:
+          - uid: postgres-down
+            title: PostgreSQL Down
+            condition: C
+            data:
+              - refId: A
+                relativeTimeRange:
+                  from: 300
+                  to: 0
+                datasourceUid: prometheus
+                model:
+                  expr: pg_up == 0
+                  refId: A
+              - refId: C
+                datasourceUid: __expr__
+                model:
+                  conditions:
+                    - evaluator:
+                        params: [0]
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params: [A]
+                      reducer:
+                        type: last
+                  refId: C
+                  type: classic_conditions
+            noDataState: OK
+            execErrState: Error
+            for: 2m
+            annotations:
+              summary: "🔴 PostgreSQL is DOWN"
+              description: "PostgreSQL exporter is not responding"
+            labels:
+              severity: critical
+            isPaused: false
+
+          - uid: postgres-high-connections
+            title: PostgreSQL High Connection Usage
+            condition: C
+            data:
+              - refId: A
+                relativeTimeRange:
+                  from: 300
+                  to: 0
+                datasourceUid: prometheus
+                model:
+                  expr: sum(pg_stat_database_numbackends) / max(pg_settings_max_connections) * 100 > 80
+                  refId: A
+              - refId: C
+                datasourceUid: __expr__
+                model:
+                  conditions:
+                    - evaluator:
+                        params: [0]
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params: [A]
+                      reducer:
+                        type: last
+                  refId: C
+                  type: classic_conditions
+            noDataState: OK
+            execErrState: Error
+            for: 5m
+            annotations:
+              summary: "PostgreSQL connection usage above 80%"
+              description: "Database connections are running high"
+            labels:
+              severity: warning
+            isPaused: false
+
+          - uid: postgres-backup-failed
+            title: PostgreSQL Backup Failed
+            condition: C
+            data:
+              - refId: A
+                relativeTimeRange:
+                  from: 86400
+                  to: 0
+                datasourceUid: prometheus
+                model:
+                  expr: kube_job_status_failed{namespace="database",job_name=~"postgres-backup.*"} > 0
+                  refId: A
+              - refId: C
+                datasourceUid: __expr__
+                model:
+                  conditions:
+                    - evaluator:
+                        params: [0]
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params: [A]
+                      reducer:
+                        type: last
+                  refId: C
+                  type: classic_conditions
+            noDataState: OK
+            execErrState: Error
+            for: 0s
+            annotations:
+              summary: "🔴 PostgreSQL backup job FAILED"
+              description: "A scheduled backup job has failed"
+            labels:
+              severity: critical
+            isPaused: false
+
+          - uid: redis-down
+            title: Redis Down
+            condition: C
+            data:
+              - refId: A
+                relativeTimeRange:
+                  from: 300
+                  to: 0
+                datasourceUid: prometheus
+                model:
+                  expr: kube_deployment_status_replicas_available{namespace="database",deployment="redis"} == 0
+                  refId: A
+              - refId: C
+                datasourceUid: __expr__
+                model:
+                  conditions:
+                    - evaluator:
+                        params: [0]
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params: [A]
+                      reducer:
+                        type: last
+                  refId: C
+                  type: classic_conditions
+            noDataState: OK
+            execErrState: Error
+            for: 2m
+            annotations:
+              summary: "🔴 Redis is DOWN"
+              description: "No Redis replicas are available"
+            labels:
+              severity: critical
+            isPaused: false
+
+          - uid: rabbitmq-down
+            title: RabbitMQ Down
+            condition: C
+            data:
+              - refId: A
+                relativeTimeRange:
+                  from: 300
+                  to: 0
+                datasourceUid: prometheus
+                model:
+                  expr: kube_deployment_status_replicas_available{namespace="database",deployment="rabbitmq"} == 0
+                  refId: A
+              - refId: C
+                datasourceUid: __expr__
+                model:
+                  conditions:
+                    - evaluator:
+                        params: [0]
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params: [A]
+                      reducer:
+                        type: last
+                  refId: C
+                  type: classic_conditions
+            noDataState: OK
+            execErrState: Error
+            for: 2m
+            annotations:
+              summary: "🔴 RabbitMQ is DOWN"
+              description: "No RabbitMQ replicas are available"
+            labels:
+              severity: critical
+            isPaused: false
+
+      # ============================================
+      # SERVICE ALERTS
+      # ============================================
+      - orgId: 1
+        name: Service Alerts
+        folder: Services
+        interval: 1m
+        rules:
+          - uid: service-no-endpoints
+            title: Service Has No Endpoints
+            condition: C
+            data:
+              - refId: A
+                relativeTimeRange:
+                  from: 600
+                  to: 0
+                datasourceUid: prometheus
+                model:
+                  expr: kube_endpoint_address_available == 0
+                  refId: A
+              - refId: C
+                datasourceUid: __expr__
+                model:
+                  conditions:
+                    - evaluator:
+                        params: [0]
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params: [A]
+                      reducer:
+                        type: last
+                  refId: C
+                  type: classic_conditions
+            noDataState: OK
+            execErrState: Error
+            for: 5m
+            annotations:
+              summary: "Service {{ $labels.endpoint }} has no endpoints"
+              description: "Service {{ $labels.endpoint }} in namespace {{ $labels.namespace }} has no available endpoints"
+            labels:
+              severity: warning
+            isPaused: false

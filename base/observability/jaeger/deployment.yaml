@@ -1,0 +1,131 @@
+# Jaeger All-in-One Deployment for GoApps
+# Distributed tracing for microservices
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: observability
+  labels:
+    name: observability
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jaeger
+  namespace: observability
+  labels:
+    app: jaeger
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: jaeger
+  template:
+    metadata:
+      labels:
+        app: jaeger
+    spec:
+      containers:
+        - name: jaeger
+          image: jaegertracing/all-in-one:1.55
+          ports:
+            - containerPort: 5775
+              protocol: UDP
+              name: agent-zipkin
+            - containerPort: 6831
+              protocol: UDP
+              name: agent-compact
+            - containerPort: 6832
+              protocol: UDP
+              name: agent-binary
+            - containerPort: 5778
+              name: agent-http
+            - containerPort: 14250
+              name: grpc
+            - containerPort: 14268
+              name: http-collector
+            - containerPort: 14269
+              name: admin
+            - containerPort: 16686
+              name: ui
+          env:
+            - name: COLLECTOR_OTLP_ENABLED
+              value: "true"
+            - name: LOG_LEVEL
+              value: "info"
+            - name: MEMORY_MAX_TRACES
+              value: "10000"
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 14269
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 14269
+            initialDelaySeconds: 10
+            periodSeconds: 15
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jaeger-collector
+  namespace: observability
+  labels:
+    app: jaeger
+spec:
+  type: ClusterIP
+  ports:
+    - port: 14250
+      targetPort: 14250
+      name: grpc
+    - port: 14268
+      targetPort: 14268
+      name: http
+  selector:
+    app: jaeger
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jaeger-query
+  namespace: observability
+  labels:
+    app: jaeger
+spec:
+  type: ClusterIP
+  ports:
+    - port: 16686
+      targetPort: 16686
+      name: ui
+  selector:
+    app: jaeger
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jaeger-agent
+  namespace: observability
+  labels:
+    app: jaeger
+spec:
+  type: ClusterIP
+  ports:
+    - port: 6831
+      targetPort: 6831
+      protocol: UDP
+      name: agent-compact
+    - port: 5778
+      targetPort: 5778
+      name: agent-http
+  selector:
+    app: jaeger

@@ -1,0 +1,24 @@
+# PgBouncer VPA - Vertical Pod Autoscaler
+# Mode: Auto - applies recommendations automatically
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: pgbouncer-vpa
+  namespace: database
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: pgbouncer
+  updatePolicy:
+    updateMode: "Auto"  # Auto-apply recommendations
+  resourcePolicy:
+    containerPolicies:
+      - containerName: pgbouncer
+        minAllowed:
+          cpu: "25m"
+          memory: "32Mi"
+        maxAllowed:
+          cpu: "500m"
+          memory: "256Mi"
+        controlledResources: ["cpu", "memory"]

@@ -1,0 +1,143 @@
+# Health Check Workflow
+# Runs periodic health checks on K8s clusters
+name: Health Check
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'  # Every 6 hours
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to check'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - staging
+          - production
+          - all
+
+jobs:
+  health-staging:
+    name: Check Staging
+    runs-on: ubuntu-latest
+    if: github.event.inputs.environment == 'staging' || github.event.inputs.environment == 'all' || github.event_name == 'schedule'
+    
+    steps:
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBECONFIG_STAGING }}" | base64 -d > ~/.kube/config
+
+      - name: Check Node Status
+        run: |
+          echo "🔍 Checking node status..."
+          kubectl get nodes -o wide
+          
+          READY=$(kubectl get nodes --no-headers | grep -c "Ready")
+          NOT_READY=$(kubectl get nodes --no-headers | grep -c "NotReady" || true)
+          
+          if [ "$NOT_READY" -gt 0 ]; then
+            echo "⚠️ Warning: $NOT_READY node(s) are NotReady!"
+            exit 1
+          fi
+          echo "✅ All $READY node(s) are Ready"
+
+      - name: Check Critical Pods
+        run: |
+          echo "🔍 Checking critical pod status..."
+          
+          # Check database pods
+          kubectl get pods -n database -o wide
+          
+          # Check monitoring pods
+          kubectl get pods -n monitoring -l app.kubernetes.io/name=grafana -o wide
+          kubectl get pods -n monitoring -l app.kubernetes.io/name=prometheus -o wide
+          
+          # Check for CrashLoopBackOff
+          CRASH=$(kubectl get pods --all-namespaces --field-selector=status.phase!=Running,status.phase!=Succeeded 2>/dev/null | grep -c "CrashLoopBackOff" || true)
+          if [ "$CRASH" -gt 0 ]; then
+            echo "⚠️ Warning: $CRASH pod(s) in CrashLoopBackOff!"
+            kubectl get pods --all-namespaces | grep CrashLoopBackOff
+          fi
+          
+          echo "✅ Critical pods check complete"
+
+      - name: Check PVC Usage
+        run: |
+          echo "🔍 Checking PVC status..."
+          kubectl get pvc --all-namespaces
+          echo "✅ PVC check complete"
+
+      - name: Check CronJobs
+        run: |
+          echo "🔍 Checking CronJob status..."
+          kubectl get cronjobs -n database
+          
+          # Check for failed jobs in last 24h
+          FAILED=$(kubectl get jobs -n database --field-selector=status.successful=0 2>/dev/null | wc -l || true)
+          if [ "$FAILED" -gt 1 ]; then
+            echo "⚠️ Warning: Found failed jobs!"
+            kubectl get jobs -n database --field-selector=status.successful=0
+          fi
+          echo "✅ CronJob check complete"
+
+  health-production:
+    name: Check Production
+    runs-on: ubuntu-latest
+    if: github.event.inputs.environment == 'production' || github.event.inputs.environment == 'all' || github.event_name == 'schedule'
+    
+    steps:
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBECONFIG_PRODUCTION }}" | base64 -d > ~/.kube/config
+
+      - name: Check Node Status
+        run: |
+          echo "🔍 Checking node status..."
+          kubectl get nodes -o wide
+          
+          READY=$(kubectl get nodes --no-headers | grep -c "Ready")
+          NOT_READY=$(kubectl get nodes --no-headers | grep -c "NotReady" || true)
+          
+          if [ "$NOT_READY" -gt 0 ]; then
+            echo "❌ Error: $NOT_READY node(s) are NotReady!"
+            exit 1
+          fi
+          echo "✅ All $READY node(s) are Ready"
+
+      - name: Check Critical Pods
+        run: |
+          echo "🔍 Checking critical pod status..."
+          
+          # Check database pods
+          kubectl get pods -n database -o wide
+          
+          # Check for CrashLoopBackOff or restarts > 10
+          CRASH=$(kubectl get pods --all-namespaces --field-selector=status.phase!=Running,status.phase!=Succeeded 2>/dev/null | grep -c "CrashLoopBackOff" || true)
+          if [ "$CRASH" -gt 0 ]; then
+            echo "❌ Error: $CRASH pod(s) in CrashLoopBackOff!"
+            kubectl get pods --all-namespaces | grep CrashLoopBackOff
+            exit 1
+          fi
+          
+          echo "✅ Critical pods check complete"
+
+      - name: Check Backup Jobs
+        run: |
+          echo "🔍 Checking backup job status..."
+          kubectl get cronjobs -n database
+          
+          # Get last job status
+          LAST_JOB=$(kubectl get jobs -n database --sort-by=.metadata.creationTimestamp -o name | tail -1)
+          if [ -n "$LAST_JOB" ]; then
+            kubectl describe $LAST_JOB -n database | grep -A5 "Pods Statuses"
+          fi
+          echo "✅ Backup check complete"

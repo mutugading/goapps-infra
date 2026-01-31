@@ -1,0 +1,99 @@
+# ArgoCD Sync Workflow
+# Triggers ArgoCD sync when infrastructure changes are pushed
+name: Sync ArgoCD
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'base/**'
+      - 'overlays/**'
+      - 'services/**'
+      - 'argocd/**'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to sync'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+          - all
+
+jobs:
+  sync-staging:
+    name: Sync Staging
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event.inputs.environment == 'staging' || github.event.inputs.environment == 'all'
+    environment: staging
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install ArgoCD CLI
+        run: |
+          curl -sSL -o argocd https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
+          chmod +x argocd
+          sudo mv argocd /usr/local/bin/
+
+      - name: Login to ArgoCD
+        run: |
+          argocd login ${{ secrets.ARGOCD_SERVER_STAGING }} \
+            --username admin \
+            --password ${{ secrets.ARGOCD_PASSWORD_STAGING }} \
+            --insecure
+
+      - name: Sync Applications
+        run: |
+          echo "🔄 Syncing staging applications..."
+          argocd app sync infra-apps --prune || true
+          argocd app sync finance-service-staging --prune || true
+          echo "✅ Staging sync triggered"
+
+      - name: Wait for Healthy
+        run: |
+          echo "⏳ Waiting for applications to be healthy..."
+          argocd app wait infra-apps --timeout 300 || true
+          argocd app wait finance-service-staging --timeout 300 || true
+          echo "✅ Applications healthy"
+
+  sync-production:
+    name: Sync Production
+    runs-on: ubuntu-latest
+    if: github.event.inputs.environment == 'production' || github.event.inputs.environment == 'all'
+    environment: production
+    needs: [sync-staging]  # Requires staging first for 'all'
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install ArgoCD CLI
+        run: |
+          curl -sSL -o argocd https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
+          chmod +x argocd
+          sudo mv argocd /usr/local/bin/
+
+      - name: Login to ArgoCD
+        run: |
+          argocd login ${{ secrets.ARGOCD_SERVER_PRODUCTION }} \
+            --username admin \
+            --password ${{ secrets.ARGOCD_PASSWORD_PRODUCTION }} \
+            --insecure
+
+      - name: Sync Applications
+        run: |
+          echo "🔄 Syncing production applications..."
+          argocd app sync infra-apps --prune
+          argocd app sync finance-service-production --prune
+          echo "✅ Production sync triggered"
+
+      - name: Wait for Healthy
+        run: |
+          echo "⏳ Waiting for applications to be healthy..."
+          argocd app wait infra-apps --timeout 300
+          argocd app wait finance-service-production --timeout 300
+          echo "✅ Applications healthy"

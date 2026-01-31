@@ -8,6 +8,7 @@ resources:
   - service.yaml
   - configmap.yaml
   - hpa.yaml
+  - vpa.yaml
 
 commonLabels:
   app.kubernetes.io/name: pgbouncer

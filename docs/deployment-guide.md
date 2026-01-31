@@ -1,14 +1,16 @@
-# VPS Deployment Guide
+# VPS Deployment Guide v2
 
 Step-by-step untuk reset dan deploy ulang K3s cluster dari awal.
 
 ## Prerequisites
 
 Di VPS (staging/production):
-- Ubuntu 22.04 LTS
+- Ubuntu 24.04 LTS
 - SSH access dengan root/sudo
 - Disk partitions sudah ready:
-  - `/dev/sdb` → backup partition (opsional, tapi recommended)
+  - Staging: `/dev/sdb1` → `/staging-goapps-backup`
+  - Production: `/dev/sdb1` → `/goapps-backup`
+- SSL certificates: `ssl-bundle.crt` dan `ssl-bundle.key`
 
 Di local machine:
 - Git repo `goapps-infra` sudah di-push ke GitHub
@@ -19,7 +21,7 @@ Di local machine:
 
 ```bash
 # SSH ke VPS
-ssh user@vps-ip
+ssh deploy@[staging-]goapps.mutugading.com
 
 # Cek apakah K3s sudah terinstall
 which k3s
@@ -56,56 +58,107 @@ chmod +x scripts/*.sh
 
 # Tunggu sampai selesai, verifikasi:
 kubectl get nodes
-# NAME    STATUS   ROLES                  AGE   VERSION
-# vps-1   Ready    control-plane,master   1m    v1.xx.x
-
 kubectl get namespaces
-# NAME              STATUS   AGE
-# database          Active   1m
-# monitoring        Active   1m
-# minio             Active   1m
-# goapps-staging    Active   1m   (atau goapps-production)
 ```
 
 ---
 
 ## Step 4: Create Secrets (MANUAL - Tidak di Git!)
 
-### Database Secrets (namespace: database)
+Lihat template di `base/secrets/secrets-template.yaml` untuk referensi.
+
+### PostgreSQL
 
 ```bash
-# PostgreSQL
-kubectl create secret generic postgres-secret \
-  --namespace=database \
-  --from-literal=POSTGRES_USER=postgres \
-  --from-literal=POSTGRES_PASSWORD='YOUR_SECURE_PASSWORD' \
+kubectl create secret generic postgres-secret -n database \
+  --from-literal=POSTGRES_USER=goapps_admin \
+  --from-literal=POSTGRES_PASSWORD='<STRONG_PASSWORD>' \
   --from-literal=POSTGRES_DB=goapps
+```
 
-# MinIO
-kubectl create secret generic minio-secret \
-  --namespace=minio \
-  --from-literal=MINIO_ROOT_USER=minioadmin \
-  --from-literal=MINIO_ROOT_PASSWORD='YOUR_MINIO_PASSWORD'
+### MinIO
 
-# Copy minio-secret ke namespace database (untuk backup jobs)
+```bash
+kubectl create secret generic minio-secret -n minio \
+  --from-literal=MINIO_ROOT_USER=admin \
+  --from-literal=MINIO_ROOT_PASSWORD='<STRONG_PASSWORD>'
+
+# Copy ke namespace database
 kubectl get secret minio-secret -n minio -o yaml | \
   sed 's/namespace: minio/namespace: database/' | \
   kubectl apply -f -
-
-# Backblaze B2 (untuk PostgreSQL backup ke cloud)
-kubectl create secret generic s3-cloud-credentials \
-  --namespace=database \
-  --from-literal=S3_ENDPOINT='s3.us-west-004.backblazeb2.com' \
-  --from-literal=S3_BUCKET='goapps-backups' \
-  --from-literal=AWS_ACCESS_KEY_ID='YOUR_B2_KEY_ID' \
-  --from-literal=AWS_SECRET_ACCESS_KEY='YOUR_B2_APP_KEY'
 ```
 
-### Verifikasi Secrets
+### RabbitMQ
 
 ```bash
-kubectl get secrets -n database
-kubectl get secrets -n minio
+kubectl create secret generic rabbitmq-secret -n database \
+  --from-literal=RABBITMQ_USER=goapps \
+  --from-literal=RABBITMQ_PASSWORD='<STRONG_PASSWORD>'
+```
+
+### Oracle Credentials (Multiple Schemas)
+
+```bash
+kubectl create secret generic oracle-credentials -n go-apps \
+  --from-literal=ORACLE_HOST='<ORACLE_IP>' \
+  --from-literal=ORACLE_PORT='1521' \
+  --from-literal=ORACLE_SERVICE='ORCLPDB1' \
+  --from-literal=ORACLE_MGTHRIS_USER='mgthris' \
+  --from-literal=ORACLE_MGTHRIS_PASSWORD='<PASSWORD>' \
+  --from-literal=ORACLE_MGTAPPS_USER='mgtapps' \
+  --from-literal=ORACLE_MGTAPPS_PASSWORD='<PASSWORD>' \
+  --from-literal=ORACLE_MGTDAT_USER='mgtdat' \
+  --from-literal=ORACLE_MGTDAT_PASSWORD='<PASSWORD>'
+```
+
+### TLS Certificate
+
+```bash
+# Create TLS secret untuk Ingress
+kubectl create secret tls goapps-tls -n ingress-nginx \
+  --cert=ssl-bundle.crt \
+  --key=ssl-bundle.key
+
+# Copy ke namespace monitoring
+kubectl get secret goapps-tls -n ingress-nginx -o yaml | \
+  sed 's/namespace: ingress-nginx/namespace: monitoring/' | \
+  kubectl apply -f -
+
+# Create TLS secret untuk Kubernetes Dashboard
+kubectl create secret tls dashboard-tls -n kubernetes-dashboard \
+  --cert=ssl-bundle.crt \
+  --key=ssl-bundle.key
+```
+
+### Grafana Admin & SMTP
+
+```bash
+kubectl create secret generic grafana-admin-secret -n monitoring \
+  --from-literal=admin-user=admin \
+  --from-literal=admin-password='<GRAFANA_PASSWORD>'
+
+kubectl create secret generic grafana-smtp-secret -n monitoring \
+  --from-literal=password='<SMTP_PASSWORD>'
+```
+
+### Backblaze B2 (Cloud Backup)
+
+```bash
+kubectl create secret generic s3-cloud-credentials -n database \
+  --from-literal=S3_ENDPOINT='s3.us-west-004.backblazeb2.com' \
+  --from-literal=S3_BUCKET='goapps-backups' \
+  --from-literal=AWS_ACCESS_KEY_ID='<B2_KEY_ID>' \
+  --from-literal=AWS_SECRET_ACCESS_KEY='<B2_APP_KEY>'
+```
+
+### Container Registry Pull Secret
+
+```bash
+kubectl create secret docker-registry ghcr-secret -n go-apps \
+  --docker-server=ghcr.io \
+  --docker-username='<GITHUB_USERNAME>' \
+  --docker-password='<GITHUB_TOKEN>'
 ```
 
 ---
@@ -113,17 +166,13 @@ kubectl get secrets -n minio
 ## Step 5: Install Monitoring Stack
 
 ```bash
-# Install Prometheus, Grafana, Loki
 ./scripts/install-monitoring.sh
 
 # Tunggu semua pods ready
 kubectl get pods -n monitoring -w
 
-# Setelah semua Running, akses Grafana:
+# Akses Grafana (via Ingress atau port-forward)
 kubectl port-forward svc/prometheus-grafana -n monitoring 3000:80
-
-# Buka browser: http://localhost:3000
-# Login: admin / (password dari script output)
 ```
 
 ---
@@ -131,16 +180,12 @@ kubectl port-forward svc/prometheus-grafana -n monitoring 3000:80
 ## Step 6: Install ArgoCD (GitOps)
 
 ```bash
-# Install ArgoCD
 ./scripts/install-argocd.sh
 
-# Catat password yang muncul di output!
+# Catat password dari output!
 
 # Akses ArgoCD UI:
 kubectl port-forward svc/argocd-server -n argocd 8080:443
-
-# Buka browser: https://localhost:8080
-# Login: admin / (password dari script output)
 ```
 
 ---
@@ -148,33 +193,30 @@ kubectl port-forward svc/argocd-server -n argocd 8080:443
 ## Step 7: Apply Base Infrastructure
 
 ```bash
-# Apply semua base configs (database, backup, etc)
+# Apply semua base configs
 make apply-base
 
 # Atau manual:
 kubectl apply -k base/namespaces/
-kubectl apply -k base/database/
+kubectl apply -k base/database/  # includes PostgreSQL, PgBouncer, Redis, RabbitMQ
 kubectl apply -k base/backup/
+kubectl apply -k base/observability/  # Jaeger
 
 # Apply alert rules
 kubectl apply -f base/monitoring/alert-rules/
 ```
 
-### Verifikasi Database
+### Verifikasi Services
 
 ```bash
-# Tunggu PostgreSQL ready
-kubectl get pods -n database -w
+# Database Layer
+kubectl get pods -n database
 
-# Cek PostgreSQL berjalan
-kubectl logs statefulset/postgres -n database
+# Jaeger Tracing
+kubectl get pods -n observability
 
-# Test koneksi
-kubectl exec -it postgres-0 -n database -- psql -U postgres -d goapps -c "SELECT 1"
-
-# Cek schemas sudah dibuat
-kubectl exec -it postgres-0 -n database -- psql -U postgres -d goapps -c "\dn"
-# Harusnya ada: export, auth, hr, finance
+# Check Redis & RabbitMQ
+kubectl exec -it deploy/redis -n database -- redis-cli ping  # PONG
 ```
 
 ---
@@ -182,94 +224,48 @@ kubectl exec -it postgres-0 -n database -- psql -U postgres -d goapps -c "\dn"
 ## Step 8: Apply ArgoCD Applications
 
 ```bash
-# Apply ArgoCD apps (mereka akan auto-sync dari Git)
 kubectl apply -f argocd/apps/
 
-# Cek status di ArgoCD UI atau:
+# Cek status
 kubectl get applications -n argocd
 ```
 
 ---
 
-## Step 9: Deploy Finance Service
+## Step 9: Deploy Services (Via ArgoCD)
 
-### Option A: Via ArgoCD (Recommended)
-
-ArgoCD sudah auto-sync dari Git. Cek status:
-
-```bash
-kubectl get applications -n argocd
-# finance-service-staging   Synced   Healthy
-```
-
-### Option B: Manual Deployment
-
-```bash
-# Staging
-kubectl apply -k services/finance-service/overlays/staging/
-
-# Production
-kubectl apply -k services/finance-service/overlays/production/
-```
-
-### Verifikasi Service
-
-```bash
-# Cek pods
-kubectl get pods -n goapps-staging
-kubectl get pods -n goapps-production
-
-# Cek services
-kubectl get svc -n goapps-staging
-kubectl get svc -n goapps-production
-
-# Cek HPA
-kubectl get hpa -n goapps-staging
-```
+ArgoCD akan auto-sync dari Git berdasarkan branch/tag:
+- **Staging**: `main` branch → auto deploy
+- **Production**: Release tags (`v1.0.0`) → manual approval
 
 ---
 
-## Step 10: Setup Ingress (Opsional)
-
-Jika menggunakan domain:
-
-```bash
-# Install Traefik (K3s sudah include) atau custom Ingress
-# Contoh: nginx-ingress
-
-helm upgrade --install ingress-nginx ingress-nginx \
-  --repo https://kubernetes.github.io/ingress-nginx \
-  --namespace ingress-nginx --create-namespace
-```
-
----
-
-## Step 11: Verifikasi Final
+## Step 10: Verifikasi Final
 
 ### Checklist
 
 - [ ] K3s cluster running: `kubectl get nodes`
 - [ ] All namespaces created: `kubectl get ns`
-- [ ] PostgreSQL running: `kubectl get pods -n database`
+- [ ] PostgreSQL running: `kubectl get pods -n database -l app=postgres`
+- [ ] PgBouncer running: `kubectl get pods -n database -l app=pgbouncer`
+- [ ] Redis running: `kubectl get pods -n database -l app=redis`
+- [ ] RabbitMQ running: `kubectl get pods -n database -l app=rabbitmq`
 - [ ] MinIO running: `kubectl get pods -n minio`
-- [ ] PgBouncer running: `kubectl get pods -n database`
 - [ ] Prometheus/Grafana running: `kubectl get pods -n monitoring`
+- [ ] Loki/Promtail running: `kubectl get pods -n monitoring -l app=loki`
+- [ ] Jaeger running: `kubectl get pods -n observability`
 - [ ] ArgoCD running: `kubectl get pods -n argocd`
-- [ ] Finance service deployed: `kubectl get pods -n goapps-staging`
 - [ ] Backup CronJobs scheduled: `kubectl get cronjobs -n database`
 - [ ] Alert rules imported: Check Grafana Alerting
 
-### Test Backup Manual
+---
 
-```bash
-# Trigger PostgreSQL backup manually
-kubectl create job --from=cronjob/postgres-backup-morning \
-  postgres-backup-test-$(date +%Y%m%d%H%M%S) -n database
+## Environment-Specific Paths
 
-# Check job status
-kubectl get jobs -n database
-kubectl logs job/postgres-backup-test-xxx -n database
-```
+| Environment | Backup Mount | Clone Command |
+|-------------|--------------|---------------|
+| **Staging** | `/staging-goapps-backup` | Use `overlays/staging/backup-patch.yaml` |
+| **Production** | `/goapps-backup` | Use `overlays/production/backup-patch.yaml` |
 
 ---
 
@@ -281,31 +277,17 @@ kubectl describe pod <pod-name> -n <namespace>
 kubectl logs <pod-name> -n <namespace>
 ```
 
-### PostgreSQL connection refused
+### Database connection issues
 ```bash
-# Cek PostgreSQL running
-kubectl get pods -n database
-# Cek service
-kubectl get svc -n database
-# Test dari dalam cluster
 kubectl run test-pg --rm -it --image=postgres:18-alpine -- \
-  psql -h postgres.database.svc.cluster.local -U postgres -d goapps
+  psql -h pgbouncer.database -U goapps_admin -d goapps
 ```
 
-### ArgoCD sync failed
+### Oracle connectivity test
 ```bash
-# Cek app status
-argocd app get <app-name>
-# Force sync
-argocd app sync <app-name> --force
-```
-
-### Backup failed
-```bash
-# Cek CronJob
-kubectl describe cronjob postgres-backup-morning -n database
-# Cek recent job logs
-kubectl logs job/postgres-backup-morning-xxx -n database
+# Check outbound to Oracle port
+kubectl run test-net --rm -it --image=busybox -- /bin/sh -c \
+  "nc -vz <ORACLE_IP> 1521"
 ```
 
 ---
@@ -319,26 +301,25 @@ kubectl logs job/postgres-backup-morning-xxx -n database
 | `make backup-now` | Manual backup trigger |
 | `make port-forward-grafana` | Access Grafana locally |
 | `make port-forward-argocd` | Access ArgoCD locally |
+| `make port-forward-jaeger` | Access Jaeger UI |
 
 ---
 
-## Staging vs Production
+## Architecture Summary
 
-| Aspect | Staging | Production |
-|--------|---------|------------|
-| VPS | 4 core, 8GB | 8 core, 16GB |
-| Namespace | goapps-staging | goapps-production |
-| Replicas | 1 | 2+ |
-| ArgoCD Sync | Auto | Manual (safety) |
-| Domain | staging.goapps.mutugading.com | goapps.mutugading.com |
-
----
-
-## Backup Strategy Summary
-
-| Target | Destination | Schedule | Retention |
-|--------|-------------|----------|-----------|
-| PostgreSQL | MinIO | 3x daily | 7 days |
-| PostgreSQL | Backblaze B2 | 3x daily | 7 days |
-| PostgreSQL | VPS disk | 3x daily | 7 days |
-| MinIO | VPS disk only | Daily | 7 days |
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        VPS Cluster                              │
+├─────────────┬───────────────────────────────────────────────────┤
+│ Namespace   │ Components                                        │
+├─────────────┼───────────────────────────────────────────────────┤
+│ database    │ PostgreSQL, PgBouncer, Redis, RabbitMQ, Exporter │
+│ minio       │ MinIO (Object Storage)                           │
+│ monitoring  │ Prometheus, Grafana, Loki, Promtail, Alertmanager│
+│ observability│ Jaeger (Tracing)                                 │
+│ argocd      │ ArgoCD (GitOps)                                  │
+│ go-apps     │ finance-service, iam-service, etc.               │
+│ ingress-nginx│ NGINX Ingress Controller                        │
+│ k8s-dashboard│ Kubernetes Dashboard                            │
+└─────────────┴───────────────────────────────────────────────────┘
+```

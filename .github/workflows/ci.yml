@@ -1,0 +1,95 @@
+# CI Workflow for goapps-infra
+# Validates Kubernetes manifests and runs linting
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+env:
+  KUSTOMIZE_VERSION: "5.3.0"
+
+jobs:
+  validate:
+    name: Validate Manifests
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Kustomize
+        uses: imranismail/setup-kustomize@v2
+        with:
+          kustomize-version: ${{ env.KUSTOMIZE_VERSION }}
+
+      - name: Validate base kustomization
+        run: |
+          echo "Validating base kustomizations..."
+          for dir in base/*/; do
+            if [ -f "${dir}kustomization.yaml" ]; then
+              echo "Validating ${dir}..."
+              kustomize build "${dir}" > /dev/null || exit 1
+            fi
+          done
+          echo "✅ All base kustomizations are valid"
+
+      - name: Validate staging overlay
+        run: |
+          echo "Validating staging overlay..."
+          if [ -f "overlays/staging/kustomization.yaml" ]; then
+            kustomize build overlays/staging > /dev/null || exit 1
+            echo "✅ Staging overlay is valid"
+          fi
+
+      - name: Validate production overlay
+        run: |
+          echo "Validating production overlay..."
+          if [ -f "overlays/production/kustomization.yaml" ]; then
+            kustomize build overlays/production > /dev/null || exit 1
+            echo "✅ Production overlay is valid"
+          fi
+
+      - name: Validate service manifests
+        run: |
+          echo "Validating service manifests..."
+          for svc in services/*/base/; do
+            if [ -f "${svc}kustomization.yaml" ]; then
+              echo "Validating ${svc}..."
+              kustomize build "${svc}" > /dev/null || exit 1
+            fi
+          done
+          echo "✅ All service manifests are valid"
+
+  lint:
+    name: Lint YAML
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install yamllint
+        run: pip install yamllint
+
+      - name: Lint YAML files
+        run: |
+          yamllint -c .yamllint.yml . || true  # Non-blocking for now
+
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'config'
+          scan-ref: '.'
+          exit-code: '0'  # Non-blocking for now
+          severity: 'CRITICAL,HIGH'

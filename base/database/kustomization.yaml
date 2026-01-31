@@ -7,6 +7,9 @@ resources:
   - postgres
   - pgbouncer
   - exporter
+  - redis
+  - rabbitmq
+  - oracle
 
 commonLabels:
   app.kubernetes.io/part-of: goapps-database
