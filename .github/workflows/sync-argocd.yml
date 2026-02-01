@@ -34,12 +34,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install ArgoCD CLI
-        run: |
-          # Use versioned release to avoid "latest" redirect issues
-          VERSION=$(curl -sI https://github.com/argoproj/argo-cd/releases/latest | grep -i "location:" | awk -F"/" '{ print $NF }' | tr -d '\r')
-          curl -sSL -o /tmp/argocd "https://github.com/argoproj/argo-cd/releases/download/${VERSION}/argocd-linux-amd64"
-          chmod +x /tmp/argocd
-          sudo mv /tmp/argocd /usr/local/bin/argocd
+        uses: ./.github/actions/install-argocd-cli
 
       - name: Login to ArgoCD
         run: |
@@ -75,11 +70,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install ArgoCD CLI
-        run: |
-          VERSION=$(curl -sI https://github.com/argoproj/argo-cd/releases/latest | grep -i "location:" | awk -F"/" '{ print $NF }' | tr -d '\r')
-          curl -sSL -o /tmp/argocd "https://github.com/argoproj/argo-cd/releases/download/${VERSION}/argocd-linux-amd64"
-          chmod +x /tmp/argocd
-          sudo mv /tmp/argocd /usr/local/bin/argocd
+        uses: ./.github/actions/install-argocd-cli
 
       - name: Login to ArgoCD
         run: |
@@ -106,8 +97,9 @@ jobs:
   sync-production-only:
     name: Sync Production (Direct)
     runs-on: ubuntu-latest
-    # Only run when explicitly requesting production via manual dispatch
-    if: github.event.inputs.environment == 'production' && github.event_name == 'workflow_dispatch'
+    # Simplified condition: github.event.inputs.environment only exists for workflow_dispatch
+    # so checking workflow_dispatch explicitly is redundant
+    if: github.event.inputs.environment == 'production'
     environment: production
     
     steps:
@@ -115,11 +107,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install ArgoCD CLI
-        run: |
-          VERSION=$(curl -sI https://github.com/argoproj/argo-cd/releases/latest | grep -i "location:" | awk -F"/" '{ print $NF }' | tr -d '\r')
-          curl -sSL -o /tmp/argocd "https://github.com/argoproj/argo-cd/releases/download/${VERSION}/argocd-linux-amd64"
-          chmod +x /tmp/argocd
-          sudo mv /tmp/argocd /usr/local/bin/argocd
+        uses: ./.github/actions/install-argocd-cli
 
       - name: Login to ArgoCD
         run: |

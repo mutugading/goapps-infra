@@ -1,0 +1,63 @@
+name: 'Install ArgoCD CLI'
+description: 'Downloads and installs the ArgoCD CLI with robust error handling'
+outputs:
+  version:
+    description: 'The version of ArgoCD CLI that was installed'
+    value: ${{ steps.get-version.outputs.version }}
+runs:
+  using: "composite"
+  steps:
+    - name: Get ArgoCD CLI Version
+      id: get-version
+      shell: bash
+      run: |
+        echo "🔍 Fetching latest ArgoCD version..."
+        VERSION=$(curl -sI https://github.com/argoproj/argo-cd/releases/latest | grep -i "location:" | awk -F"/" '{ print $NF }' | tr -d '\r')
+        
+        # Error handling: ensure VERSION is not empty
+        if [ -z "$VERSION" ]; then
+          echo "❌ Failed to get ArgoCD version from GitHub releases"
+          exit 1
+        fi
+        
+        echo "version=${VERSION}" >> $GITHUB_OUTPUT
+        echo "📦 ArgoCD version: ${VERSION}"
+
+    - name: Download ArgoCD CLI
+      shell: bash
+      run: |
+        VERSION="${{ steps.get-version.outputs.version }}"
+        echo "⬇️ Downloading ArgoCD CLI ${VERSION}..."
+        
+        DOWNLOAD_URL="https://github.com/argoproj/argo-cd/releases/download/${VERSION}/argocd-linux-amd64"
+        HTTP_STATUS=$(curl -sSL -w "%{http_code}" -o /tmp/argocd "$DOWNLOAD_URL")
+        
+        if [ "$HTTP_STATUS" -ne 200 ]; then
+          echo "❌ Failed to download ArgoCD CLI (HTTP $HTTP_STATUS)"
+          echo "URL: $DOWNLOAD_URL"
+          exit 1
+        fi
+        
+        # Verify the binary is not empty
+        if [ ! -s /tmp/argocd ]; then
+          echo "❌ Downloaded ArgoCD binary is empty"
+          exit 1
+        fi
+        
+        echo "✅ Download complete"
+
+    - name: Install ArgoCD CLI
+      shell: bash
+      run: |
+        echo "🔧 Installing ArgoCD CLI..."
+        chmod +x /tmp/argocd
+        sudo mv /tmp/argocd /usr/local/bin/argocd
+        
+        # Verify installation
+        if ! command -v argocd &> /dev/null; then
+          echo "❌ ArgoCD CLI installation failed"
+          exit 1
+        fi
+        
+        INSTALLED_VERSION=$(argocd version --client --short 2>/dev/null || echo "unknown")
+        echo "✅ ArgoCD CLI installed successfully: ${INSTALLED_VERSION}"
