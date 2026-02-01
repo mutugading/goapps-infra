@@ -7,12 +7,12 @@
 # - Prometheus: https://goapps.mutugading.com/prometheus (with Basic Auth)
 # - MinIO:      https://goapps.mutugading.com/minio/
 # - ArgoCD:     https://goapps.mutugading.com/argocd/
+#
+# NOTE: configuration-snippet REMOVED karena diblokir oleh default nginx config
 # ============================================================================
 
 ---
 # Grafana Ingress
-# Grafana with serve_from_sub_path=true handles sub-path internally.
-# NO rewrite-target needed.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -41,7 +41,6 @@ spec:
 
 ---
 # Prometheus Ingress (with Basic Auth for Production)
-# Prometheus with routePrefix=/prometheus handles sub-path internally.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -73,8 +72,7 @@ spec:
                   number: 9090
 
 ---
-# MinIO Console Ingress
-# MinIO Console - NO auth, NO rewrite
+# MinIO Console Ingress - NO auth, NO configuration-snippet
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -83,15 +81,9 @@ metadata:
   annotations:
     nginx.ingress.kubernetes.io/proxy-body-size: "0"
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
-    # Required for MinIO Console WebSocket
     nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
-    nginx.ingress.kubernetes.io/configuration-snippet: |
-      proxy_set_header Upgrade $http_upgrade;
-      proxy_set_header Connection "upgrade";
-      proxy_set_header X-Forwarded-Proto $scheme;
-      proxy_set_header X-Real-IP $remote_addr;
 spec:
   ingressClassName: nginx
   tls:
@@ -108,12 +100,10 @@ spec:
               service:
                 name: minio
                 port:
-                  number: 9001  # Console port
+                  number: 9001
 
 ---
-# ArgoCD Ingress with TLS Termination
-# ArgoCD installed with --rootpath=/argocd, so NO rewrite needed
-# NO auth - ArgoCD has its own login
+# ArgoCD Ingress with TLS Termination - NO auth, NO configuration-snippet
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -122,13 +112,9 @@ metadata:
   annotations:
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
-    # Required for ArgoCD gRPC and WebSocket
     nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
-    nginx.ingress.kubernetes.io/configuration-snippet: |
-      proxy_set_header Upgrade $http_upgrade;
-      proxy_set_header Connection "upgrade";
 spec:
   ingressClassName: nginx
   tls:
