@@ -74,18 +74,15 @@ spec:
 
 ---
 # MinIO Console Ingress
-# MinIO Console needs rewrite to strip /minio prefix
-# Reference: https://github.com/minio/docs/blob/main/source/integrations/setup-nginx-proxy-with-minio.rst
+# MinIO Console - NO auth, NO rewrite
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: minio-ingress
   namespace: minio
   annotations:
-    nginx.ingress.kubernetes.io/proxy-body-size: "0"  # No limit for large uploads
+    nginx.ingress.kubernetes.io/proxy-body-size: "0"
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
-    nginx.ingress.kubernetes.io/rewrite-target: /$2
-    nginx.ingress.kubernetes.io/use-regex: "true"
     # Required for MinIO Console WebSocket
     nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
@@ -93,6 +90,8 @@ metadata:
     nginx.ingress.kubernetes.io/configuration-snippet: |
       proxy_set_header Upgrade $http_upgrade;
       proxy_set_header Connection "upgrade";
+      proxy_set_header X-Forwarded-Proto $scheme;
+      proxy_set_header X-Real-IP $remote_addr;
 spec:
   ingressClassName: nginx
   tls:
@@ -103,8 +102,8 @@ spec:
     - host: goapps.mutugading.com
       http:
         paths:
-          - path: /minio(/|$)(.*)
-            pathType: ImplementationSpecific
+          - path: /minio
+            pathType: Prefix
             backend:
               service:
                 name: minio
@@ -113,8 +112,8 @@ spec:
 
 ---
 # ArgoCD Ingress with TLS Termination
-# ArgoCD runs in insecure mode (HTTP on port 8080), ingress handles TLS
-# Reference: https://argo-cd.readthedocs.io/en/stable/operator-manual/ingress/
+# ArgoCD installed with --rootpath=/argocd, so NO rewrite needed
+# NO auth - ArgoCD has its own login
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -122,9 +121,7 @@ metadata:
   namespace: argocd
   annotations:
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
-    nginx.ingress.kubernetes.io/backend-protocol: "HTTP"  # ArgoCD is in insecure mode
-    nginx.ingress.kubernetes.io/rewrite-target: /$2
-    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
     # Required for ArgoCD gRPC and WebSocket
     nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
@@ -142,10 +139,10 @@ spec:
     - host: goapps.mutugading.com
       http:
         paths:
-          - path: /argocd(/|$)(.*)
-            pathType: ImplementationSpecific
+          - path: /argocd
+            pathType: Prefix
             backend:
               service:
                 name: argocd-server
                 port:
-                  number: 80  # HTTP port (insecure mode)
+                  number: 80
