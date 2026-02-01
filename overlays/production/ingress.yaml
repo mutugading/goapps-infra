@@ -2,10 +2,13 @@
 # Combined Ingress - Path-Based Routing with TLS + Auth (PRODUCTION)
 # ============================================================================
 # 
-# Akses via HTTPS:
+# Akses via HTTPS (path-based):
 # - Grafana:    https://goapps.mutugading.com/grafana
 # - Prometheus: https://goapps.mutugading.com/prometheus (with Basic Auth)
-# - ArgoCD:     https://goapps.mutugading.com/argocd
+# - MinIO:      https://goapps.mutugading.com/minio
+#
+# Akses via Port (direct):
+# - ArgoCD:     https://goapps.mutugading.com:30443
 # ============================================================================
 
 ---
@@ -71,6 +74,8 @@ spec:
 
 ---
 # ArgoCD Ingress
+# Note: ArgoCD has limited support for sub-path routing.
+# Using rewrite-target to strip /argocd prefix
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -79,6 +84,9 @@ metadata:
   annotations:
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      proxy_set_header X-Forwarded-Proto https;
 spec:
   ingressClassName: nginx
   tls:
@@ -89,10 +97,39 @@ spec:
     - host: goapps.mutugading.com
       http:
         paths:
-          - path: /argocd
-            pathType: Prefix
+          - path: /argocd(/|$)(.*)
+            pathType: ImplementationSpecific
             backend:
               service:
                 name: argocd-server
                 port:
                   number: 443
+
+---
+# MinIO Console Ingress
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: minio-ingress
+  namespace: minio
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "1024m"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - goapps.mutugading.com
+      secretName: goapps-tls
+  rules:
+    - host: goapps.mutugading.com
+      http:
+        paths:
+          - path: /minio(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: minio
+                port:
+                  number: 9001  # Console port

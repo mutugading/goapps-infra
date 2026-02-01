@@ -124,12 +124,14 @@ ENVIRONMENT=production ./scripts/bootstrap.sh
 
 # Tunggu ~2-3 menit sampai selesai
 # Script akan:
-# - Install K3s v1.34.x
+# - Install K3s v1.34.x (dengan Traefik DISABLED)
 # - Install Helm
 # - Create namespaces:
 #   - Staging: database, monitoring, minio, argocd, goapps-staging
 #   - Production: database, monitoring, minio, argocd, goapps-production
 ```
+
+> **Note:** K3s secara default menginstall Traefik, tapi script ini men-disable Traefik (`--disable=traefik`) karena kita menggunakan **NGINX Ingress Controller** yang lebih mature untuk production dengan banyak microservices.
 
 > ⚠️ **PENTING:** Jika lupa set ENVIRONMENT=production di production VPS, buat namespace manual:
 > ```bash
@@ -471,6 +473,22 @@ kubectl -n argocd get secret argocd-initial-admin-secret \
 echo
 ```
 
+### Apply ArgoCD NodePort Service
+
+ArgoCD tidak mendukung sub-path routing dengan baik, jadi kita gunakan port khusus:
+
+```bash
+kubectl apply -k base/argocd/
+
+# Verifikasi service
+kubectl get svc -n argocd
+# Output: argocd-server-nodeport dengan NodePort 30443
+```
+
+Akses ArgoCD via:
+- **Staging:** `https://staging-goapps.mutugading.com:30443`
+- **Production:** `https://goapps.mutugading.com:30443`
+
 ---
 
 ## Step 11: Apply ArgoCD Applications
@@ -774,6 +792,27 @@ Port forward dari VPS tidak bisa diakses langsung dari komputer lokal.
 **Solusi:**
 1. Gunakan SSH Tunnel (lihat Step 14)
 2. Atau akses via Ingress setelah NGINX Ingress terinstall
+
+## NGINX Ingress EXTERNAL-IP Pending (Traefik Conflict)
+
+Jika NGINX Ingress menunjukkan `EXTERNAL-IP: <pending>`, kemungkinan Traefik masih aktif dan menggunakan port 80/443.
+
+```bash
+# Cek apakah Traefik masih running
+kubectl get pods -n kube-system | grep traefik
+
+# Jika ada, disable Traefik
+kubectl delete helmchart traefik traefik-crd -n kube-system
+
+# Tunggu 30 detik, lalu restart NGINX controller
+kubectl rollout restart deployment ingress-nginx-controller -n ingress-nginx
+
+# Verifikasi NGINX mendapat IP
+kubectl get svc -n ingress-nginx
+# Output: EXTERNAL-IP harus berisi IP, bukan <pending>
+```
+
+> **Note:** Untuk instalasi baru, gunakan script `bootstrap.sh` terbaru yang sudah disable Traefik dari awal.
 
 ---
 

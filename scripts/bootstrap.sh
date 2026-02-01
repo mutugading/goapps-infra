@@ -19,13 +19,15 @@ ENVIRONMENT="${ENVIRONMENT:-staging}"
 echo -e "${YELLOW}Environment: ${ENVIRONMENT}${NC}"
 
 # =============================================================================
-# Step 1: Install K3s
+# Step 1: Install K3s (without Traefik - we use NGINX Ingress instead)
 # =============================================================================
 echo -e "${GREEN}[1/7] Installing K3s...${NC}"
 if command -v k3s &> /dev/null; then
     echo "K3s already installed, skipping..."
 else
-    curl -sfL https://get.k3s.io | sh -
+    # Disable Traefik - we use NGINX Ingress Controller instead
+    # This avoids port conflicts and provides better enterprise support
+    curl -sfL https://get.k3s.io | sh -s - --disable=traefik
     sleep 10
 fi
 
@@ -35,7 +37,7 @@ sudo cp /etc/rancher/k3s/k3s.yaml ~/.kube/config
 sudo chown $(id -u):$(id -g) ~/.kube/config
 export KUBECONFIG=~/.kube/config
 
-echo -e "${GREEN}K3s installed successfully!${NC}"
+echo -e "${GREEN}K3s installed successfully (Traefik disabled)!${NC}"
 kubectl get nodes
 
 # =============================================================================

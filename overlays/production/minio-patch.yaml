@@ -1,0 +1,15 @@
+# MinIO environment patch for Production
+# Sets the correct MINIO_BROWSER_REDIRECT_URL for sub-path routing
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: minio
+  namespace: minio
+spec:
+  template:
+    spec:
+      containers:
+        - name: minio
+          env:
+            - name: MINIO_BROWSER_REDIRECT_URL
+              value: "https://goapps.mutugading.com/minio/"

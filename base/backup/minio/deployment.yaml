@@ -31,6 +31,11 @@ spec:
               name: api
             - containerPort: 9001
               name: console
+          env:
+            # Required for sub-path routing (e.g., /minio/)
+            # This will be overridden by Kustomize overlay per environment
+            - name: MINIO_BROWSER_REDIRECT_URL
+              value: "/minio/"
           envFrom:
             - secretRef:
                 name: minio-secret
