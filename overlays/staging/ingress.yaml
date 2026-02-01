@@ -13,6 +13,8 @@
 
 ---
 # Grafana Ingress
+# IMPORTANT: Grafana with serve_from_sub_path=true handles sub-path internally.
+# DO NOT use rewrite-target, it will break the routing.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -21,7 +23,7 @@ metadata:
   annotations:
     nginx.ingress.kubernetes.io/proxy-body-size: "50m"
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
-    nginx.ingress.kubernetes.io/rewrite-target: /$2
+    # NO rewrite-target - Grafana handles /grafana internally
 spec:
   ingressClassName: nginx
   tls:
@@ -32,8 +34,8 @@ spec:
     - host: staging-goapps.mutugading.com
       http:
         paths:
-          - path: /grafana(/|$)(.*)
-            pathType: ImplementationSpecific
+          - path: /grafana
+            pathType: Prefix
             backend:
               service:
                 name: prometheus-grafana
@@ -42,6 +44,7 @@ spec:
 
 ---
 # Prometheus Ingress
+# Prometheus with routePrefix=/prometheus handles sub-path internally.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -50,6 +53,7 @@ metadata:
   annotations:
     nginx.ingress.kubernetes.io/proxy-body-size: "50m"
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    # NO rewrite-target - Prometheus handles /prometheus internally
 spec:
   ingressClassName: nginx
   tls:
@@ -68,9 +72,9 @@ spec:
                 port:
                   number: 9090
 
-
 ---
 # MinIO Console Ingress
+# MinIO with MINIO_BROWSER_REDIRECT_URL and MINIO_CONSOLE_SUBPATH handles sub-path.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -79,7 +83,7 @@ metadata:
   annotations:
     nginx.ingress.kubernetes.io/proxy-body-size: "1024m"
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
-    nginx.ingress.kubernetes.io/rewrite-target: /$2
+    # NO rewrite-target - MinIO handles /minio internally via MINIO_CONSOLE_SUBPATH
 spec:
   ingressClassName: nginx
   tls:
@@ -90,8 +94,8 @@ spec:
     - host: staging-goapps.mutugading.com
       http:
         paths:
-          - path: /minio(/|$)(.*)
-            pathType: ImplementationSpecific
+          - path: /minio
+            pathType: Prefix
             backend:
               service:
                 name: minio
