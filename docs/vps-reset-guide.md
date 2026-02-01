@@ -67,11 +67,34 @@ sudo docker ps         # Harusnya tidak ada container k3s
 
 ## Step 4: Siapkan Backup Directory
 
+> **Note:** Backup directory sudah di-mount ke disk terpisah (/dev/sdb1, ~60GB):
+> - **Staging VPS**: `/staging-goapps-backup`
+> - **Production VPS**: `/goapps-backup`
+
+### Untuk Staging VPS:
+
 ```bash
-# Buat direktori backup untuk staging
+# Verify disk mount
+df -h /staging-goapps-backup
+# Expected: /dev/sdb1  59G  24K  56G  1% /staging-goapps-backup
+
+# Buat subdirektori backup
 sudo mkdir -p /staging-goapps-backup/postgres
 sudo mkdir -p /staging-goapps-backup/minio
 sudo chown -R $USER:$USER /staging-goapps-backup
+```
+
+### Untuk Production VPS:
+
+```bash
+# Verify disk mount
+df -h /goapps-backup
+# Expected: /dev/sdb1  59G  24K  56G  1% /goapps-backup
+
+# Buat subdirektori backup
+sudo mkdir -p /goapps-backup/postgres
+sudo mkdir -p /goapps-backup/minio
+sudo chown -R $USER:$USER /goapps-backup
 ```
 
 ---
@@ -93,15 +116,25 @@ chmod +x scripts/*.sh
 ## Step 6: Bootstrap K3s
 
 ```bash
-# Jalankan bootstrap script
+# STAGING VPS - jalankan:
 ./scripts/bootstrap.sh
+
+# PRODUCTION VPS - jalankan dengan ENVIRONMENT=production:
+ENVIRONMENT=production ./scripts/bootstrap.sh
 
 # Tunggu ~2-3 menit sampai selesai
 # Script akan:
-# - Install K3s v1.31.x
+# - Install K3s v1.34.x
 # - Install Helm
-# - Create namespaces (database, monitoring, minio, go-apps, argocd, observability)
+# - Create namespaces:
+#   - Staging: database, monitoring, minio, argocd, goapps-staging
+#   - Production: database, monitoring, minio, argocd, goapps-production
 ```
+
+> ⚠️ **PENTING:** Jika lupa set ENVIRONMENT=production di production VPS, buat namespace manual:
+> ```bash
+> kubectl create namespace goapps-production
+> ```
 
 ### Verifikasi Bootstrap
 
@@ -167,23 +200,104 @@ kubectl create secret generic oracle-credentials -n goapps-staging \
   --from-literal=ORACLE_MGTDAT_PASSWORD='<PASSWORD>'
 ```
 
+
+```bash
+# For Prod:
+kubectl create secret generic oracle-credentials -n goapps-production \
+  --from-literal=ORACLE_HOST='<ORACLE_IP>' \
+  --from-literal=ORACLE_PORT='1521' \
+  --from-literal=ORACLE_SERVICE='ORCLPDB1' \
+  --from-literal=ORACLE_MGTHRIS_USER='mgthris' \
+  --from-literal=ORACLE_MGTHRIS_PASSWORD='<PASSWORD>' \
+  --from-literal=ORACLE_MGTAPPS_USER='mgtapps' \
+  --from-literal=ORACLE_MGTAPPS_PASSWORD='<PASSWORD>' \
+  --from-literal=ORACLE_MGTDAT_USER='mgtdat' \
+  --from-literal=ORACLE_MGTDAT_PASSWORD='<PASSWORD>'
+```
+
+```bash
+# Future add schema (delete and recreate):
+kubectl delete secret oracle-credentials -n goapps-staging
+kubectl create secret generic oracle-credentials -n goapps-staging \
+  --from-literal=ORACLE_HOST='<ORACLE_IP>' \
+  --from-literal=ORACLE_PORT='1521' \
+  --from-literal=ORACLE_SERVICE='ORCLPDB1' \
+  --from-literal=ORACLE_MGTHRIS_USER='mgthris' \
+  --from-literal=ORACLE_MGTHRIS_PASSWORD='<PASSWORD>' \
+  --from-literal=ORACLE_MGTAPPS_USER='mgtapps' \
+  --from-literal=ORACLE_MGTAPPS_PASSWORD='<PASSWORD>' \
+  --from-literal=ORACLE_MGTDAT_USER='mgtdat' \
+  --from-literal=ORACLE_MGTDAT_PASSWORD='<PASSWORD>' \
+  --from-literal=ORACLE_MGTFIN_USER='mgtfin' \
+  --from-literal=ORACLE_MGTFIN_PASSWORD='<PASSWORD>'
+# Note: Tambahkan semua schema yang diperlukan
+```
+
 ### TLS Secret (SSL Certificate)
 
 ```bash
-# Upload SSL files ke VPS dulu, lalu:
-kubectl create secret tls goapps-tls -n monitoring \
-  --cert=ssl-bundle.crt \
-  --key=ssl-bundle.key
+# Siapkan SSL files (cert + private key):
 
-# Copy ke namespace lain
-# Use goapps-staging for staging VPS, goapps-production for production VPS
-APP_NS="goapps-staging"  # Change to goapps-production for production VPS
+# File yang dibutuhkan:
+# - ssl-bundle.crt     = Certificate bundle (chain)
+# - mutugading.com.key = Private key
+
+# Dari desktop Linux Anda, jalankan:
+# Untuk STAGING
+scp /home/hom/Documents/SSL-2025-20251115T013232Z-1-001/SSL-2025/SSL-2025/STAR_mutugading_com/ssl-bundle.crt \
+    /home/hom/Documents/SSL-2025-20251115T013232Z-1-001/SSL-2025/SSL-2025/STAR_mutugading_com/mutugading.com.key \
+    deploy@staging-goapps.mutugading.com:~/
+
+# Untuk PRODUCTION
+scp /home/hom/Documents/SSL-2025-20251115T013232Z-1-001/SSL-2025/SSL-2025/STAR_mutugading_com/ssl-bundle.crt \
+    /home/hom/Documents/SSL-2025-20251115T013232Z-1-001/SSL-2025/SSL-2025/STAR_mutugading_com/mutugading.com.key \
+    deploy@goapps.mutugading.com:~/
+```
+
+```bash
+# STAGING VPS - SSH ke staging, lalu:
+
+# Verifikasi file terlebih dahulu
+ls -la $HOME/ssl-bundle.crt $HOME/mutugading.com.key
+
+kubectl create secret tls goapps-tls -n monitoring \
+  --cert=$HOME/ssl-bundle.crt \
+  --key=$HOME/mutugading.com.key
+
+# Copy ke namespace lain (STAGING)
+APP_NS="goapps-staging"
 for ns in argocd ingress-nginx $APP_NS kubernetes-dashboard; do
   kubectl create ns $ns 2>/dev/null || true
   kubectl get secret goapps-tls -n monitoring -o yaml | \
     sed "s/namespace: monitoring/namespace: $ns/" | \
     kubectl apply -f -
 done
+
+# Cleanup file SSL (untuk keamanan)
+rm $HOME/ssl-bundle.crt $HOME/mutugading.com.key
+```
+
+```bash
+# PRODUCTION VPS - SSH ke production, lalu:
+
+# Verifikasi file terlebih dahulu
+ls -la $HOME/ssl-bundle.crt $HOME/mutugading.com.key
+
+kubectl create secret tls goapps-tls -n monitoring \
+  --cert=$HOME/ssl-bundle.crt \
+  --key=$HOME/mutugading.com.key
+
+# Copy ke namespace lain (PRODUCTION)
+APP_NS="goapps-production"
+for ns in argocd ingress-nginx $APP_NS kubernetes-dashboard; do
+  kubectl create ns $ns 2>/dev/null || true
+  kubectl get secret goapps-tls -n monitoring -o yaml | \
+    sed "s/namespace: monitoring/namespace: $ns/" | \
+    kubectl apply -f -
+done
+
+# Cleanup file SSL (untuk keamanan)
+rm $HOME/ssl-bundle.crt $HOME/mutugading.com.key
 ```
 
 ### Grafana & SMTP Secret
@@ -201,18 +315,27 @@ kubectl create secret generic grafana-smtp-secret -n monitoring \
 
 ```bash
 # For staging (use goapps-production for production VPS):
+
+# STAGING VPS
 kubectl create secret docker-registry ghcr-secret -n goapps-staging \
   --docker-server=ghcr.io \
-  --docker-username='<GITHUB_USERNAME>' \
-  --docker-password='<GITHUB_TOKEN>'
+  --docker-username=<GITHUB_USERNAME> \
+  --docker-password=<GITHUB_PAT_TOKEN>
+
+# PRODUCTION VPS
+kubectl create secret docker-registry ghcr-secret -n goapps-production \
+  --docker-server=ghcr.io \
+  --docker-username=<GITHUB_USERNAME> \
+  --docker-password=<GITHUB_PAT_TOKEN>
 ```
 
-### Prometheus Basic Auth (untuk Production)
+### Prometheus Basic Auth (untuk Staging & Production)
 
 ```bash
-# Generate htpasswd (ganti USERNAME dan PASSWORD)
-htpasswd -c auth prometheus_admin
-# atau manual:
+# Install htpasswd jika belum ada
+sudo apt install apache2-utils -y
+
+# STAGING VPS - Generate htpasswd
 # Use bcrypt for stronger password hashing (you will be prompted for the password):
 htpasswd -nBC 10 prometheus_admin > auth
 
@@ -221,13 +344,26 @@ kubectl create secret generic prometheus-basic-auth -n monitoring \
 rm auth
 ```
 
+```bash
+# PRODUCTION VPS - Generate htpasswd
+# Use bcrypt for stronger password hashing (you will be prompted for the password):
+htpasswd -nBC 10 prometheus_admin > auth
+
+kubectl create secret generic prometheus-basic-auth -n monitoring \
+  --from-file=auth
+rm auth
+```
+
+> **Note:** Password untuk staging dan production HARUS berbeda untuk keamanan.
+
 ### Verifikasi Secrets
 
 ```bash
 kubectl get secrets -n database
 kubectl get secrets -n minio
 kubectl get secrets -n monitoring
-kubectl get secrets -n go-apps
+kubectl get secrets -n goapps-staging    # For staging VPS
+# kubectl get secrets -n goapps-production  # For production VPS
 ```
 
 ---
