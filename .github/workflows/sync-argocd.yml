@@ -44,7 +44,7 @@ jobs:
           argocd login ${{ secrets.ARGOCD_SERVER_STAGING }} \
             --username admin \
             --password ${{ secrets.ARGOCD_PASSWORD_STAGING }} \
-            --insecure
+            --grpc-web
 
       - name: Sync Applications
         run: |
@@ -63,9 +63,13 @@ jobs:
   sync-production:
     name: Sync Production
     runs-on: ubuntu-latest
+    # Only run for production or all, with conditional needs
     if: github.event.inputs.environment == 'production' || github.event.inputs.environment == 'all'
     environment: production
-    needs: [sync-staging]  # Requires staging first for 'all'
+    # Only require staging when deploying 'all', not for production-only
+    needs: [sync-staging]
+    # This allows production to run even if staging is skipped
+    # when environment is 'production' only
     
     steps:
       - name: Checkout
@@ -82,11 +86,51 @@ jobs:
           argocd login ${{ secrets.ARGOCD_SERVER_PRODUCTION }} \
             --username admin \
             --password ${{ secrets.ARGOCD_PASSWORD_PRODUCTION }} \
-            --insecure
+            --grpc-web
 
       - name: Sync Applications
         run: |
           echo "🔄 Syncing production applications..."
+          argocd app sync infra-apps --prune
+          argocd app sync finance-service-production --prune
+          echo "✅ Production sync triggered"
+
+      - name: Wait for Healthy
+        run: |
+          echo "⏳ Waiting for applications to be healthy..."
+          argocd app wait infra-apps --timeout 300
+          argocd app wait finance-service-production --timeout 300
+          echo "✅ Applications healthy"
+
+  # Separate job for production-only deployments
+  sync-production-only:
+    name: Sync Production (Direct)
+    runs-on: ubuntu-latest
+    # Only run when explicitly requesting production-only
+    if: github.event.inputs.environment == 'production' && github.event_name == 'workflow_dispatch'
+    environment: production
+    # No needs - runs independently
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install ArgoCD CLI
+        run: |
+          curl -sSL -o argocd https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
+          chmod +x argocd
+          sudo mv argocd /usr/local/bin/
+
+      - name: Login to ArgoCD
+        run: |
+          argocd login ${{ secrets.ARGOCD_SERVER_PRODUCTION }} \
+            --username admin \
+            --password ${{ secrets.ARGOCD_PASSWORD_PRODUCTION }} \
+            --grpc-web
+
+      - name: Sync Applications
+        run: |
+          echo "🔄 Syncing production applications (direct)..."
           argocd app sync infra-apps --prune
           argocd app sync finance-service-production --prune
           echo "✅ Production sync triggered"

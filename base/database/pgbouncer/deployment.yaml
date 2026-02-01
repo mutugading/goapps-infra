@@ -26,9 +26,20 @@ spec:
             - configMapRef:
                 name: pgbouncer-config
           env:
-            - name: DATABASE_URL
-              value: "postgres://postgres:$(POSTGRES_PASSWORD)@postgres-0.postgres.database.svc.cluster.local:5432/goapps"
-            - name: POSTGRES_PASSWORD
+            # Use separate env vars instead of DATABASE_URL interpolation
+            # edoburu/pgbouncer natively supports these
+            - name: DB_HOST
+              value: "postgres-0.postgres.database.svc.cluster.local"
+            - name: DB_PORT
+              value: "5432"
+            - name: DB_NAME
+              value: "goapps"
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: POSTGRES_USER
+            - name: DB_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: postgres-secret
@@ -50,3 +61,4 @@ spec:
               port: 5432
             initialDelaySeconds: 5
             periodSeconds: 5
+

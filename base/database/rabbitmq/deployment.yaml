@@ -1,14 +1,15 @@
-# RabbitMQ Deployment for GoApps
-# Message queue for async processing
+# RabbitMQ StatefulSet for GoApps
+# Message queue for async processing with persistent storage
 ---
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: rabbitmq
   namespace: database
   labels:
     app: rabbitmq
 spec:
+  serviceName: rabbitmq
   replicas: 1
   selector:
     matchLabels:
@@ -64,9 +65,16 @@ spec:
           volumeMounts:
             - name: rabbitmq-data
               mountPath: /var/lib/rabbitmq
-      volumes:
-        - name: rabbitmq-data
-          emptyDir: {}
+  # Persistent storage to prevent data loss on restart
+  volumeClaimTemplates:
+    - metadata:
+        name: rabbitmq-data
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 5Gi
 ---
 apiVersion: v1
 kind: Service
