@@ -29,7 +29,7 @@ spec:
             # Use separate env vars instead of DATABASE_URL interpolation
             # edoburu/pgbouncer natively supports these
             - name: DB_HOST
-              value: "postgres-0.postgres.database.svc.cluster.local"
+              value: "postgres.database.svc.cluster.local"
             - name: DB_PORT
               value: "5432"
             - name: DB_NAME

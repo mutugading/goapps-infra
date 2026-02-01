@@ -112,7 +112,7 @@ kubectl get nodes
 
 # Cek namespaces
 kubectl get ns
-# Output: database, monitoring, minio, go-apps, argocd, observability, dll.
+# Output: database, monitoring, minio, goapps-staging, argocd, observability, dll.
 ```
 
 ---
@@ -154,7 +154,8 @@ kubectl create secret generic rabbitmq-secret -n database \
 ### Oracle Credentials
 
 ```bash
-kubectl create secret generic oracle-credentials -n go-apps \
+# For staging:
+kubectl create secret generic oracle-credentials -n goapps-staging \
   --from-literal=ORACLE_HOST='<ORACLE_IP>' \
   --from-literal=ORACLE_PORT='1521' \
   --from-literal=ORACLE_SERVICE='ORCLPDB1' \
@@ -175,7 +176,9 @@ kubectl create secret tls goapps-tls -n monitoring \
   --key=ssl-bundle.key
 
 # Copy ke namespace lain
-for ns in argocd ingress-nginx go-apps; do
+# Use goapps-staging for staging VPS, goapps-production for production VPS
+APP_NS="goapps-staging"  # Change to goapps-production for production VPS
+for ns in argocd ingress-nginx $APP_NS kubernetes-dashboard; do
   kubectl create ns $ns 2>/dev/null || true
   kubectl get secret goapps-tls -n monitoring -o yaml | \
     sed "s/namespace: monitoring/namespace: $ns/" | \
@@ -197,7 +200,8 @@ kubectl create secret generic grafana-smtp-secret -n monitoring \
 ### GitHub Container Registry (GHCR)
 
 ```bash
-kubectl create secret docker-registry ghcr-secret -n go-apps \
+# For staging (use goapps-production for production VPS):
+kubectl create secret docker-registry ghcr-secret -n goapps-staging \
   --docker-server=ghcr.io \
   --docker-username='<GITHUB_USERNAME>' \
   --docker-password='<GITHUB_TOKEN>'
@@ -209,7 +213,8 @@ kubectl create secret docker-registry ghcr-secret -n go-apps \
 # Generate htpasswd (ganti USERNAME dan PASSWORD)
 htpasswd -c auth prometheus_admin
 # atau manual:
-echo "prometheus_admin:$(openssl passwd -apr1 'PASSWORD')" > auth
+# Use bcrypt for stronger password hashing:
+htpasswd -nbBC 10 prometheus_admin 'PASSWORD' > auth
 
 kubectl create secret generic prometheus-basic-auth -n monitoring \
   --from-file=auth
@@ -415,9 +420,9 @@ Setelah infrastructure ready:
 ```bash
 kubectl apply -k services/finance-service/overlays/staging/
 
-# Monitor
-kubectl get pods -n go-apps -w
-kubectl get hpa -n go-apps
+# Monitor (namespace is goapps-staging, not go-apps)
+kubectl get pods -n goapps-staging -w
+kubectl get hpa -n goapps-staging
 ```
 
 ---

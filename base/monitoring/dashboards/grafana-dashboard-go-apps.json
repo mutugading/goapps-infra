@@ -71,7 +71,7 @@
             "type": "stat",
             "targets": [
                 {
-                    "expr": "sum(kube_pod_status_phase{namespace=\"go-apps\", phase=\"Running\"})",
+                    "expr": "sum(kube_pod_status_phase{namespace=\"$namespace\", phase=\"Running\"})",
                     "refId": "A"
                 }
             ]
@@ -132,7 +132,7 @@
             "type": "stat",
             "targets": [
                 {
-                    "expr": "avg(rate(container_cpu_usage_seconds_total{namespace=\"go-apps\"}[5m])) * 100",
+                    "expr": "avg(rate(container_cpu_usage_seconds_total{namespace=\"$namespace\"}[5m])) * 100",
                     "refId": "A"
                 }
             ]
@@ -193,7 +193,7 @@
             "type": "stat",
             "targets": [
                 {
-                    "expr": "avg(container_memory_usage_bytes{namespace=\"go-apps\"} / container_spec_memory_limit_bytes{namespace=\"go-apps\"}) * 100",
+                    "expr": "avg(container_memory_usage_bytes{namespace=\"$namespace\"} / container_spec_memory_limit_bytes{namespace=\"$namespace\"}) * 100",
                     "refId": "A"
                 }
             ]
@@ -246,7 +246,7 @@
             "type": "stat",
             "targets": [
                 {
-                    "expr": "kube_horizontalpodautoscaler_status_current_replicas{namespace=\"go-apps\"}",
+                    "expr": "kube_horizontalpodautoscaler_status_current_replicas{namespace=\"$namespace\"}",
                     "refId": "A"
                 }
             ]
@@ -340,7 +340,7 @@
             "type": "timeseries",
             "targets": [
                 {
-                    "expr": "rate(container_cpu_usage_seconds_total{namespace=\"go-apps\", pod=~\"export-svc.*\", container!=\"\"}[5m]) * 1000",
+                    "expr": "rate(container_cpu_usage_seconds_total{namespace=\"$namespace\", pod=~\"export-svc.*\", container!=\"\"}[5m]) * 1000",
                     "legendFormat": "{{pod}}",
                     "refId": "A"
                 }
@@ -422,7 +422,7 @@
             "type": "timeseries",
             "targets": [
                 {
-                    "expr": "container_memory_usage_bytes{namespace=\"go-apps\", pod=~\"export-svc.*\", container!=\"\"}",
+                    "expr": "container_memory_usage_bytes{namespace=\"$namespace\", pod=~\"export-svc.*\", container!=\"\"}",
                     "legendFormat": "{{pod}}",
                     "refId": "A"
                 }
@@ -519,17 +519,17 @@
             "type": "timeseries",
             "targets": [
                 {
-                    "expr": "kube_horizontalpodautoscaler_status_current_replicas{namespace=\"go-apps\"}",
+                    "expr": "kube_horizontalpodautoscaler_status_current_replicas{namespace=\"$namespace\"}",
                     "legendFormat": "Current {{horizontalpodautoscaler}}",
                     "refId": "A"
                 },
                 {
-                    "expr": "kube_horizontalpodautoscaler_spec_min_replicas{namespace=\"go-apps\"}",
+                    "expr": "kube_horizontalpodautoscaler_spec_min_replicas{namespace=\"$namespace\"}",
                     "legendFormat": "Min {{horizontalpodautoscaler}}",
                     "refId": "B"
                 },
                 {
-                    "expr": "kube_horizontalpodautoscaler_spec_max_replicas{namespace=\"go-apps\"}",
+                    "expr": "kube_horizontalpodautoscaler_spec_max_replicas{namespace=\"$namespace\"}",
                     "legendFormat": "Max {{horizontalpodautoscaler}}",
                     "refId": "C"
                 }
@@ -611,7 +611,7 @@
             "type": "timeseries",
             "targets": [
                 {
-                    "expr": "kube_pod_container_status_restarts_total{namespace=\"go-apps\"}",
+                    "expr": "kube_pod_container_status_restarts_total{namespace=\"$namespace\"}",
                     "legendFormat": "{{pod}}",
                     "refId": "A"
                 }

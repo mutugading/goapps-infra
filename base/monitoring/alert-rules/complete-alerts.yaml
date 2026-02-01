@@ -663,7 +663,7 @@ data:
                   to: 0
                 datasourceUid: prometheus
                 model:
-                  expr: kube_deployment_status_replicas_available{namespace="database",deployment="rabbitmq"} == 0
+                  expr: kube_statefulset_status_replicas_ready{namespace="database",statefulset="rabbitmq"} == 0
                   refId: A
               - refId: C
                 datasourceUid: __expr__

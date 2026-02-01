@@ -52,7 +52,8 @@ curl -sfL https://get.k3s.io | sh -
 # 2. Run bootstrap script
 ./scripts/bootstrap.sh
 
-# 3. Install monitoring stack
+# 3. Install monitoring stack (GRAFANA_PASSWORD required!)
+export GRAFANA_PASSWORD='your-secure-password'
 ./scripts/install-monitoring.sh
 
 # 4. Install ArgoCD (GitOps)
