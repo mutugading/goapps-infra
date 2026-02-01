@@ -18,35 +18,31 @@ spec:
     spec:
       containers:
         - name: pgbouncer
-          image: bitnami/pgbouncer:1.22.1
+          image: edoburu/pgbouncer:v1.25.1-p0
           ports:
-            - containerPort: 6432
+            - containerPort: 5432
               name: pgbouncer
           envFrom:
             - configMapRef:
                 name: pgbouncer-config
           env:
-            # Bitnami pgbouncer uses different env var names
-            - name: POSTGRESQL_HOST
+            # edoburu/pgbouncer env vars
+            - name: DB_HOST
               value: "postgres.database.svc.cluster.local"
-            - name: POSTGRESQL_PORT
+            - name: DB_PORT
               value: "5432"
-            - name: POSTGRESQL_DATABASE
+            - name: DB_NAME
               value: "goapps"
-            - name: POSTGRESQL_USERNAME
+            - name: DB_USER
               valueFrom:
                 secretKeyRef:
                   name: postgres-secret
                   key: POSTGRES_USER
-            - name: POSTGRESQL_PASSWORD
+            - name: DB_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: postgres-secret
                   key: POSTGRES_PASSWORD
-            - name: PGBOUNCER_PORT
-              value: "6432"
-            - name: PGBOUNCER_DATABASE
-              value: "goapps"
           resources:
             requests:
               memory: "64Mi"
