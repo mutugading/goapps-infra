@@ -485,15 +485,67 @@ kubectl get applications -n argocd
 
 ---
 
-## Step 12: Apply Ingress (Staging)
+## Step 12: Install NGINX Ingress Controller
+
+> **PENTING:** K3s menggunakan Traefik sebagai default ingress controller, tetapi konfigurasi ingress kita menggunakan NGINX. Anda HARUS install NGINX Ingress Controller terlebih dahulu!
 
 ```bash
-kubectl apply -f overlays/staging/ingress.yaml
+# Install NGINX Ingress Controller
+./scripts/install-nginx-ingress.sh
+
+# Tunggu sampai controller ready
+kubectl get pods -n ingress-nginx
+
+# Verifikasi service mendapat External IP
+kubectl get svc -n ingress-nginx
+# Output: ingress-nginx-controller dengan External IP atau LoadBalancer
+```
+
+### Copy TLS Secret ke ingress-nginx namespace
+
+```bash
+kubectl get secret goapps-tls -n monitoring -o yaml | \
+  sed 's/namespace: monitoring/namespace: ingress-nginx/' | \
+  kubectl apply -f -
 ```
 
 ---
 
-## Step 13: Verifikasi Final
+## Step 13: Apply Ingress
+
+### Untuk STAGING VPS:
+
+```bash
+kubectl apply -f overlays/staging/ingress.yaml
+
+# Verifikasi ingress
+kubectl get ingress -A
+```
+
+Akses via browser (setelah DNS pointing):
+- Grafana: `https://staging-goapps.mutugading.com/grafana`
+- Prometheus: `https://staging-goapps.mutugading.com/prometheus`
+- ArgoCD: `https://staging-goapps.mutugading.com/argocd`
+
+### Untuk PRODUCTION VPS:
+
+> ⚠️ **PENTING:** Jangan apply ingress staging di production! Gunakan file yang benar:
+
+```bash
+kubectl apply -f overlays/production/ingress.yaml
+
+# Verifikasi ingress
+kubectl get ingress -A
+```
+
+Akses via browser (setelah DNS pointing):
+- Grafana: `https://goapps.mutugading.com/grafana`
+- Prometheus: `https://goapps.mutugading.com/prometheus` (dengan Basic Auth)
+- ArgoCD: `https://goapps.mutugading.com/argocd`
+
+---
+
+## Step 14: Verifikasi Final
 
 ### Checklist
 
@@ -544,23 +596,54 @@ kubectl exec -it deploy/redis -n database -- redis-cli ping
 
 ### Access Grafana (Port Forward)
 
+> **Note:** Port forward hanya bekerja langsung di VPS. Untuk akses dari komputer lokal, gunakan SSH tunnel.
+
+**Opsi 1: Langsung dari VPS (jika ada GUI/browser di VPS)**
 ```bash
 kubectl port-forward svc/prometheus-grafana -n monitoring 3000:80
-# Buka browser: http://localhost:3000
+# Buka browser di VPS: http://localhost:3000
+```
+
+**Opsi 2: SSH Tunnel dari komputer lokal**
+```bash
+# Di komputer lokal Anda (bukan di VPS), jalankan:
+# Untuk STAGING:
+ssh -L 3000:localhost:3000 deploy@staging-goapps.mutugading.com "kubectl port-forward svc/prometheus-grafana -n monitoring 3000:80"
+
+# Untuk PRODUCTION:
+ssh -L 3000:localhost:3000 deploy@goapps.mutugading.com "kubectl port-forward svc/prometheus-grafana -n monitoring 3000:80"
+
+# Lalu buka browser di lokal: http://localhost:3000
 # Login: admin / <GRAFANA_PASSWORD>
 ```
+
+**Opsi 3: Akses via Ingress (Recommended)**
+
+Setelah NGINX Ingress terinstall dan DNS pointing:
+- Staging: `https://staging-goapps.mutugading.com/grafana`
+- Production: `https://goapps.mutugading.com/grafana`
 
 ### Access ArgoCD (Port Forward)
 
 ```bash
-kubectl port-forward svc/argocd-server -n argocd 8080:443
-# Buka browser: https://localhost:8080
+# SSH Tunnel dari komputer lokal:
+# Untuk STAGING:
+ssh -L 8080:localhost:8080 deploy@staging-goapps.mutugading.com "kubectl port-forward svc/argocd-server -n argocd 8080:443"
+
+# Untuk PRODUCTION:
+ssh -L 8080:localhost:8080 deploy@goapps.mutugading.com "kubectl port-forward svc/argocd-server -n argocd 8080:443"
+
+# Buka browser di lokal: https://localhost:8080
 # Login: admin / <ARGOCD_PASSWORD>
 ```
 
+Alternatif via Ingress:
+- Staging: `https://staging-goapps.mutugading.com/argocd`
+- Production: `https://goapps.mutugading.com/argocd`
+
 ---
 
-## Step 14: Deploy Finance Service
+## Step 15: Deploy Finance Service
 
 Setelah infrastructure ready:
 
@@ -634,6 +717,63 @@ sudo systemctl enable k3s
 kubectl -n argocd patch secret argocd-initial-admin-secret \
   -p '{"data": {"password": "'$(echo -n 'newpassword' | base64)'"}}'
 ```
+
+## NGINX Ingress tidak bekerja / Ingress tidak punya Address
+
+Jika `kubectl get ingress -A` menunjukkan ingress tanpa ADDRESS:
+
+```bash
+# 1. Pastikan NGINX Ingress Controller terinstall
+kubectl get pods -n ingress-nginx
+# Jika tidak ada pods, install dulu:
+./scripts/install-nginx-ingress.sh
+
+# 2. Pastikan TLS secret ada di namespace yang benar
+kubectl get secret goapps-tls -n monitoring
+kubectl get secret goapps-tls -n ingress-nginx  # Harus ada juga di sini
+
+# 3. Copy secret ke ingress-nginx jika belum ada
+kubectl get secret goapps-tls -n monitoring -o yaml | \
+  sed 's/namespace: monitoring/namespace: ingress-nginx/' | \
+  kubectl apply -f -
+```
+
+## Finance Service ImagePullBackOff
+
+Error ini terjadi karena Docker image belum tersedia di GHCR:
+
+```bash
+# Cek detail error
+kubectl describe pod -n goapps-staging -l app=finance-service
+
+# Pastikan secret ghcr-secret ada
+kubectl get secret ghcr-secret -n goapps-staging
+```
+
+**Solusi:** Pastikan tim Backend sudah push Docker image ke:
+- `ghcr.io/mutugading/goapps-backend/finance-service:develop` (untuk staging)
+- `ghcr.io/mutugading/goapps-backend/finance-service:latest` (untuk production)
+
+## Production VPS menggunakan Ingress Staging (salah)
+
+Jika tidak sengaja apply `overlays/staging/ingress.yaml` di Production VPS:
+
+```bash
+# Hapus ingress staging yang salah
+kubectl delete ingress grafana-ingress prometheus-ingress argocd-ingress -n monitoring --ignore-not-found
+kubectl delete ingress argocd-ingress -n argocd --ignore-not-found
+
+# Apply ingress production yang benar
+kubectl apply -f overlays/production/ingress.yaml
+```
+
+## localhost refused to connect saat Port Forward
+
+Port forward dari VPS tidak bisa diakses langsung dari komputer lokal.
+
+**Solusi:**
+1. Gunakan SSH Tunnel (lihat Step 14)
+2. Atau akses via Ingress setelah NGINX Ingress terinstall
 
 ---
 
