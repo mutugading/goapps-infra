@@ -14,10 +14,26 @@ echo "=================================================="
 # Colors
 GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
+RED='\033[0;31m'
 NC='\033[0m'
 
 # Default passwords (should be overridden via --set)
-GRAFANA_PASSWORD="${GRAFANA_PASSWORD:-admin}"
+GRAFANA_PASSWORD="${GRAFANA_PASSWORD:-}"
+
+# Validate Grafana password
+if [ -z "$GRAFANA_PASSWORD" ]; then
+    echo -e "${RED}ERROR: GRAFANA_PASSWORD environment variable is not set!${NC}"
+    echo "Please set a strong password:"
+    echo "  export GRAFANA_PASSWORD='your-secure-password'"
+    echo "  ./scripts/install-monitoring.sh"
+    exit 1
+fi
+
+if [ "$GRAFANA_PASSWORD" == "admin" ]; then
+    echo -e "${YELLOW}WARNING: Using default 'admin' password is insecure!${NC}"
+    echo -e "${YELLOW}Please change Grafana password immediately after installation.${NC}"
+    echo ""
+fi
 
 # =============================================================================
 # Step 1: Install kube-prometheus-stack

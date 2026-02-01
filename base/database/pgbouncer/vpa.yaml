@@ -1,5 +1,6 @@
 # PgBouncer VPA - Vertical Pod Autoscaler
-# Mode: Auto - applies recommendations automatically
+# Mode: Off - recommendations only, no auto-restart
+# Reason: PgBouncer should have high availability, avoid unexpected restarts
 apiVersion: autoscaling.k8s.io/v1
 kind: VerticalPodAutoscaler
 metadata:
@@ -11,7 +12,7 @@ spec:
     kind: Deployment
     name: pgbouncer
   updatePolicy:
-    updateMode: "Auto"  # Auto-apply recommendations
+    updateMode: "Off"  # Recommendations only, apply manually
   resourcePolicy:
     containerPolicies:
       - containerName: pgbouncer
