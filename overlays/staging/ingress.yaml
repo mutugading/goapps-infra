@@ -7,8 +7,8 @@
 # - Prometheus: https://staging-goapps.mutugading.com/prometheus
 # - MinIO:      https://staging-goapps.mutugading.com/minio
 #
-# Akses via Port (direct):
-# - ArgoCD:     https://staging-goapps.mutugading.com:30443
+# Akses via Port (direct - HTTP karena ArgoCD insecure mode):
+# - ArgoCD:     http://staging-goapps.mutugading.com:30080
 # ============================================================================
 
 ---
@@ -68,38 +68,6 @@ spec:
                 port:
                   number: 9090
 
----
-# ArgoCD Ingress
-# Note: ArgoCD has limited support for sub-path routing.
-# Using rewrite-target to strip /argocd prefix
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: argocd-ingress
-  namespace: argocd
-  annotations:
-    nginx.ingress.kubernetes.io/ssl-redirect: "true"
-    nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
-    nginx.ingress.kubernetes.io/rewrite-target: /$2
-    nginx.ingress.kubernetes.io/configuration-snippet: |
-      proxy_set_header X-Forwarded-Proto https;
-spec:
-  ingressClassName: nginx
-  tls:
-    - hosts:
-        - staging-goapps.mutugading.com
-      secretName: goapps-tls
-  rules:
-    - host: staging-goapps.mutugading.com
-      http:
-        paths:
-          - path: /argocd(/|$)(.*)
-            pathType: ImplementationSpecific
-            backend:
-              service:
-                name: argocd-server
-                port:
-                  number: 443
 
 ---
 # MinIO Console Ingress

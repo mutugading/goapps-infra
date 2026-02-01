@@ -8,7 +8,7 @@ resources:
   - ../../../base/backup/minio/
 
 patches:
-  - path: ../minio-patch.yaml
+  - path: minio-patch.yaml
     target:
       kind: Deployment
       name: minio
