@@ -35,9 +35,11 @@ jobs:
 
       - name: Install ArgoCD CLI
         run: |
-          curl -sSL -o argocd https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
-          chmod +x argocd
-          sudo mv argocd /usr/local/bin/
+          # Use versioned release to avoid "latest" redirect issues
+          VERSION=$(curl -sI https://github.com/argoproj/argo-cd/releases/latest | grep -i "location:" | awk -F"/" '{ print $NF }' | tr -d '\r')
+          curl -sSL -o /tmp/argocd "https://github.com/argoproj/argo-cd/releases/download/${VERSION}/argocd-linux-amd64"
+          chmod +x /tmp/argocd
+          sudo mv /tmp/argocd /usr/local/bin/argocd
 
       - name: Login to ArgoCD
         run: |
@@ -63,13 +65,10 @@ jobs:
   sync-production:
     name: Sync Production
     runs-on: ubuntu-latest
-    # Only run for production or all, with conditional needs
-    if: github.event.inputs.environment == 'production' || github.event.inputs.environment == 'all'
+    # Only run for 'all' environment selection
+    if: github.event.inputs.environment == 'all'
     environment: production
-    # Only require staging when deploying 'all', not for production-only
     needs: [sync-staging]
-    # This allows production to run even if staging is skipped
-    # when environment is 'production' only
     
     steps:
       - name: Checkout
@@ -77,9 +76,10 @@ jobs:
 
       - name: Install ArgoCD CLI
         run: |
-          curl -sSL -o argocd https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
-          chmod +x argocd
-          sudo mv argocd /usr/local/bin/
+          VERSION=$(curl -sI https://github.com/argoproj/argo-cd/releases/latest | grep -i "location:" | awk -F"/" '{ print $NF }' | tr -d '\r')
+          curl -sSL -o /tmp/argocd "https://github.com/argoproj/argo-cd/releases/download/${VERSION}/argocd-linux-amd64"
+          chmod +x /tmp/argocd
+          sudo mv /tmp/argocd /usr/local/bin/argocd
 
       - name: Login to ArgoCD
         run: |
@@ -102,14 +102,13 @@ jobs:
           argocd app wait finance-service-production --timeout 300
           echo "✅ Applications healthy"
 
-  # Separate job for production-only deployments
+  # Separate job for production-only deployments (manual dispatch)
   sync-production-only:
     name: Sync Production (Direct)
     runs-on: ubuntu-latest
-    # Only run when explicitly requesting production-only
+    # Only run when explicitly requesting production via manual dispatch
     if: github.event.inputs.environment == 'production' && github.event_name == 'workflow_dispatch'
     environment: production
-    # No needs - runs independently
     
     steps:
       - name: Checkout
@@ -117,9 +116,10 @@ jobs:
 
       - name: Install ArgoCD CLI
         run: |
-          curl -sSL -o argocd https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
-          chmod +x argocd
-          sudo mv argocd /usr/local/bin/
+          VERSION=$(curl -sI https://github.com/argoproj/argo-cd/releases/latest | grep -i "location:" | awk -F"/" '{ print $NF }' | tr -d '\r')
+          curl -sSL -o /tmp/argocd "https://github.com/argoproj/argo-cd/releases/download/${VERSION}/argocd-linux-amd64"
+          chmod +x /tmp/argocd
+          sudo mv /tmp/argocd /usr/local/bin/argocd
 
       - name: Login to ArgoCD
         run: |

@@ -213,8 +213,8 @@ kubectl create secret docker-registry ghcr-secret -n goapps-staging \
 # Generate htpasswd (ganti USERNAME dan PASSWORD)
 htpasswd -c auth prometheus_admin
 # atau manual:
-# Use bcrypt for stronger password hashing:
-htpasswd -nbBC 10 prometheus_admin 'PASSWORD' > auth
+# Use bcrypt for stronger password hashing (you will be prompted for the password):
+htpasswd -nBC 10 prometheus_admin > auth
 
 kubectl create secret generic prometheus-basic-auth -n monitoring \
   --from-file=auth
