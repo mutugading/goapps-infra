@@ -406,20 +406,28 @@ kubectl apply -k base/database/
 # Tunggu PostgreSQL ready
 kubectl get pods -n database -w
 
-# Apply backup CronJobs
+# Apply backup & MinIO CronJobs
 kubectl apply -k base/backup/
 
 # Apply Kubernetes Dashboard admin
 kubectl apply -k base/kubernetes-dashboard/
 
-# Apply observability (Jaeger)
-kubectl apply -k base/observability/
+# Apply alert rules (menggunakan kustomize)
+kubectl apply -k base/monitoring/alert-rules/
+```
 
-# Apply alert rules
-kubectl apply -f base/monitoring/alert-rules/
+### Step 9.1: Create PostgreSQL Role untuk Exporter
 
-# Apply dashboards
-kubectl apply -f base/monitoring/dashboards/
+> **PENTING:** Tanpa role `postgres`, monitoring exporter tidak bisa collect metrics!
+
+```bash
+# STAGING VPS - ganti <PASSWORD> dengan password postgres secret Anda
+kubectl exec -it postgres-0 -n database -- psql -U stgapps -d goapps -c \
+  "CREATE ROLE postgres LOGIN SUPERUSER PASSWORD '<POSTGRES_PASSWORD>';"
+
+# PRODUCTION VPS - ganti <PASSWORD> dengan password postgres secret Anda
+kubectl exec -it postgres-0 -n database -- psql -U goapps -d goapps -c \
+  "CREATE ROLE postgres LOGIN SUPERUSER PASSWORD '<POSTGRES_PASSWORD>';"
 ```
 
 ### Verifikasi Database Layer
@@ -438,6 +446,9 @@ kubectl get pods -n database -l app=redis
 # RabbitMQ
 kubectl get pods -n database -l app=rabbitmq
 ```
+
+> **Note:** Jika RabbitMQ menunjukkan 0/1 Ready tapi logs normal, itu karena readiness probe timeout.
+> Fix dengan: `kubectl rollout restart statefulset rabbitmq -n database`
 
 ---
 
