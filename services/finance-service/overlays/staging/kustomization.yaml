@@ -12,4 +12,4 @@ patches:
 
 images:
   - name: ghcr.io/mutugading/goapps-backend/finance-service
-    newTag: develop  # Use develop branch for staging
+    newTag: main  # Use main branch tag (pushed by CI)

@@ -19,6 +19,8 @@ spec:
         prometheus.io/port: "8090"
         prometheus.io/path: "/metrics"
     spec:
+      imagePullSecrets:
+        - name: ghcr-secret
       containers:
         - name: finance-service
           image: ghcr.io/mutugading/goapps-backend/finance-service:latest
@@ -31,32 +33,39 @@ spec:
             - containerPort: 8090
               name: metrics
           env:
-            - name: ENVIRONMENT
+            - name: APP_ENV
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
-            - name: DB_HOST
+            # Database config - matches Go app config.go bindings
+            - name: DATABASE_HOST
               value: "pgbouncer.database.svc.cluster.local"
-            - name: DB_PORT
+            - name: DATABASE_PORT
               value: "5432"
-            - name: DB_NAME
+            - name: DATABASE_NAME
               value: "goapps"
-            - name: DB_SCHEMA
-              value: "finance"
-            - name: DB_USER
+            - name: DATABASE_SSLMODE
+              value: "disable"
+            - name: DATABASE_USER
               valueFrom:
                 secretKeyRef:
                   name: postgres-secret
                   key: POSTGRES_USER
-            - name: DB_PASSWORD
+            - name: DATABASE_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: postgres-secret
                   key: POSTGRES_PASSWORD
+            # Redis config
             - name: REDIS_HOST
               value: "redis.database.svc.cluster.local"
             - name: REDIS_PORT
               value: "6379"
+            # Tracing
+            - name: TRACING_ENABLED
+              value: "true"
+            - name: JAEGER_ENDPOINT
+              value: "jaeger-collector.monitoring.svc.cluster.local:4317"
           resources:
             requests:
               memory: "128Mi"
