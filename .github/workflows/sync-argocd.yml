@@ -36,12 +36,28 @@ jobs:
       - name: Install ArgoCD CLI
         uses: ./.github/actions/install-argocd-cli
 
+      - name: Start Port Forward
+        run: |
+          echo "🔌 Starting port-forward to ArgoCD..."
+          # Kill any existing port-forward
+          pkill -f "kubectl port-forward.*argocd" || true
+          # Start port-forward in background
+          nohup kubectl port-forward svc/argocd-server -n argocd 8443:443 > /dev/null 2>&1 &
+          # Wait for port to be ready
+          for i in {1..10}; do
+            if nc -z localhost 8443 2>/dev/null; then
+              echo "✅ Port-forward ready on localhost:8443"
+              break
+            fi
+            echo "⏳ Waiting for port-forward... ($i/10)"
+            sleep 1
+          done
+
       - name: Login to ArgoCD
         run: |
-          argocd login ${{ secrets.ARGOCD_SERVER_STAGING }} \
+          argocd login localhost:8443 \
             --username admin \
             --password ${{ secrets.ARGOCD_PASSWORD_STAGING }} \
-            --grpc-web \
             --insecure
 
       - name: Sync Applications
@@ -58,10 +74,13 @@ jobs:
           argocd app wait finance-service-staging --timeout 300 || true
           echo "✅ Applications healthy"
 
+      - name: Cleanup
+        if: always()
+        run: pkill -f "kubectl port-forward.*argocd" || true
+
   sync-production:
     name: Sync Production
     runs-on: [self-hosted, production, goapps-runner]
-    # Only run for 'all' environment selection
     if: github.event.inputs.environment == 'all'
     environment: production
     needs: [sync-staging]
@@ -76,9 +95,16 @@ jobs:
       - name: Start Port Forward
         run: |
           echo "🔌 Starting port-forward to ArgoCD..."
-          kubectl port-forward svc/argocd-server -n argocd 8443:443 &
-          sleep 3
-          echo "✅ Port-forward ready on localhost:8443"
+          pkill -f "kubectl port-forward.*argocd" || true
+          nohup kubectl port-forward svc/argocd-server -n argocd 8443:443 > /dev/null 2>&1 &
+          for i in {1..10}; do
+            if nc -z localhost 8443 2>/dev/null; then
+              echo "✅ Port-forward ready on localhost:8443"
+              break
+            fi
+            echo "⏳ Waiting for port-forward... ($i/10)"
+            sleep 1
+          done
 
       - name: Login to ArgoCD
         run: |
@@ -101,11 +127,13 @@ jobs:
           argocd app wait finance-service-production --timeout 300
           echo "✅ Applications healthy"
 
+      - name: Cleanup
+        if: always()
+        run: pkill -f "kubectl port-forward.*argocd" || true
+
   sync-production-only:
     name: Sync Production (Direct)
     runs-on: [self-hosted, production, goapps-runner]
-    # Simplified condition: github.event.inputs.environment only exists for workflow_dispatch
-    # so checking workflow_dispatch explicitly is redundant
     if: github.event.inputs.environment == 'production'
     environment: production
     
@@ -119,9 +147,16 @@ jobs:
       - name: Start Port Forward
         run: |
           echo "🔌 Starting port-forward to ArgoCD..."
-          kubectl port-forward svc/argocd-server -n argocd 8443:443 &
-          sleep 3
-          echo "✅ Port-forward ready on localhost:8443"
+          pkill -f "kubectl port-forward.*argocd" || true
+          nohup kubectl port-forward svc/argocd-server -n argocd 8443:443 > /dev/null 2>&1 &
+          for i in {1..10}; do
+            if nc -z localhost 8443 2>/dev/null; then
+              echo "✅ Port-forward ready on localhost:8443"
+              break
+            fi
+            echo "⏳ Waiting for port-forward... ($i/10)"
+            sleep 1
+          done
 
       - name: Login to ArgoCD
         run: |
@@ -143,3 +178,7 @@ jobs:
           argocd app wait infra-apps --timeout 300
           argocd app wait finance-service-production --timeout 300
           echo "✅ Applications healthy"
+
+      - name: Cleanup
+        if: always()
+        run: pkill -f "kubectl port-forward.*argocd" || true
