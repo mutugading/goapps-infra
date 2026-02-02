@@ -25,7 +25,7 @@ on:
 jobs:
   sync-staging:
     name: Sync Staging
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, staging, goapps-runner]
     if: github.event_name == 'push' || github.event.inputs.environment == 'staging' || github.event.inputs.environment == 'all'
     environment: staging
     
@@ -41,7 +41,8 @@ jobs:
           argocd login ${{ secrets.ARGOCD_SERVER_STAGING }} \
             --username admin \
             --password ${{ secrets.ARGOCD_PASSWORD_STAGING }} \
-            --grpc-web
+            --grpc-web \
+            --insecure
 
       - name: Sync Applications
         run: |
@@ -59,7 +60,7 @@ jobs:
 
   sync-production:
     name: Sync Production
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, production, goapps-runner]
     # Only run for 'all' environment selection
     if: github.event.inputs.environment == 'all'
     environment: production
@@ -77,7 +78,8 @@ jobs:
           argocd login ${{ secrets.ARGOCD_SERVER_PRODUCTION }} \
             --username admin \
             --password ${{ secrets.ARGOCD_PASSWORD_PRODUCTION }} \
-            --grpc-web
+            --grpc-web \
+            --insecure
 
       - name: Sync Applications
         run: |
@@ -93,10 +95,9 @@ jobs:
           argocd app wait finance-service-production --timeout 300
           echo "✅ Applications healthy"
 
-  # Separate job for production-only deployments (manual dispatch)
   sync-production-only:
     name: Sync Production (Direct)
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, production, goapps-runner]
     # Simplified condition: github.event.inputs.environment only exists for workflow_dispatch
     # so checking workflow_dispatch explicitly is redundant
     if: github.event.inputs.environment == 'production'
@@ -114,7 +115,8 @@ jobs:
           argocd login ${{ secrets.ARGOCD_SERVER_PRODUCTION }} \
             --username admin \
             --password ${{ secrets.ARGOCD_PASSWORD_PRODUCTION }} \
-            --grpc-web
+            --grpc-web \
+            --insecure
 
       - name: Sync Applications
         run: |

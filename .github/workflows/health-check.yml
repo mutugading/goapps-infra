@@ -20,18 +20,11 @@ on:
 jobs:
   health-staging:
     name: Check Staging
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, staging, goapps-runner]
     if: github.event.inputs.environment == 'staging' || github.event.inputs.environment == 'all' || github.event_name == 'schedule'
     
     steps:
-      - name: Setup kubectl
-        uses: azure/setup-kubectl@v3
-
-      - name: Configure kubeconfig
-        run: |
-          mkdir -p ~/.kube
-          echo "${{ secrets.KUBECONFIG_STAGING }}" | base64 -d > ~/.kube/config
-
+      # Self-hosted runner already has kubectl configured
       - name: Check Node Status
         run: |
           echo "🔍 Checking node status..."
@@ -87,18 +80,11 @@ jobs:
 
   health-production:
     name: Check Production
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, production, goapps-runner]
     if: github.event.inputs.environment == 'production' || github.event.inputs.environment == 'all' || github.event_name == 'schedule'
     
     steps:
-      - name: Setup kubectl
-        uses: azure/setup-kubectl@v3
-
-      - name: Configure kubeconfig
-        run: |
-          mkdir -p ~/.kube
-          echo "${{ secrets.KUBECONFIG_PRODUCTION }}" | base64 -d > ~/.kube/config
-
+      # Self-hosted runner already has kubectl configured
       - name: Check Node Status
         run: |
           echo "🔍 Checking node status..."
