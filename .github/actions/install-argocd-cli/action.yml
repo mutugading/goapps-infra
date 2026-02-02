@@ -51,13 +51,19 @@ runs:
       run: |
         echo "🔧 Installing ArgoCD CLI..."
         chmod +x /tmp/argocd
-        sudo mv /tmp/argocd /usr/local/bin/argocd
+        
+        # Install to user's local bin (no sudo required)
+        mkdir -p $HOME/.local/bin
+        mv /tmp/argocd $HOME/.local/bin/argocd
+        
+        # Add to PATH for this session
+        echo "$HOME/.local/bin" >> $GITHUB_PATH
         
         # Verify installation
-        if ! command -v argocd &> /dev/null; then
+        if [ ! -x "$HOME/.local/bin/argocd" ]; then
           echo "❌ ArgoCD CLI installation failed"
           exit 1
         fi
         
-        INSTALLED_VERSION=$(argocd version --client --short 2>/dev/null || echo "unknown")
+        INSTALLED_VERSION=$($HOME/.local/bin/argocd version --client --short 2>/dev/null || echo "unknown")
         echo "✅ ArgoCD CLI installed successfully: ${INSTALLED_VERSION}"
