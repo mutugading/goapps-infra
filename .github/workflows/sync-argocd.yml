@@ -1,5 +1,6 @@
 # ArgoCD Sync Workflow
-# Triggers ArgoCD sync when infrastructure changes are pushed
+# Uses ARGOCD_AUTH_TOKEN for headless authentication
+# Requires: ARGOCD_TOKEN_STAGING and ARGOCD_TOKEN_PRODUCTION secrets
 name: Sync ArgoCD
 
 on:
@@ -33,50 +34,41 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install ArgoCD CLI
-        uses: ./.github/actions/install-argocd-cli
-
-      - name: Start Port Forward
+      - name: Get ArgoCD Pod
+        id: argocd
         run: |
-          echo "🔌 Starting port-forward to ArgoCD..."
-          # Kill any existing port-forward
-          pkill -f "kubectl port-forward.*argocd" || true
-          # Start port-forward in background
-          nohup kubectl port-forward svc/argocd-server -n argocd 8443:443 > /dev/null 2>&1 &
-          # Wait for port to be ready
-          for i in {1..10}; do
-            if nc -z localhost 8443 2>/dev/null; then
-              echo "✅ Port-forward ready on localhost:8443"
-              break
-            fi
-            echo "⏳ Waiting for port-forward... ($i/10)"
-            sleep 1
-          done
-
-      - name: Login to ArgoCD
-        run: |
-          argocd login localhost:8443 \
-            --username admin \
-            --password ${{ secrets.ARGOCD_PASSWORD_STAGING }} \
-            --insecure
+          ARGOCD_POD=$(kubectl get pods -n argocd -l app.kubernetes.io/name=argocd-server -o jsonpath='{.items[0].metadata.name}')
+          echo "pod=$ARGOCD_POD" >> $GITHUB_OUTPUT
+          echo "✅ Found ArgoCD pod: $ARGOCD_POD"
 
       - name: Sync Applications
+        env:
+          ARGOCD_AUTH_TOKEN: ${{ secrets.ARGOCD_TOKEN_STAGING }}
         run: |
           echo "🔄 Syncing staging applications..."
-          argocd app sync infra-apps --prune || true
-          argocd app sync finance-service-staging --prune || true
+          ARGOCD_POD="${{ steps.argocd.outputs.pod }}"
+          
+          # Use auth token via environment variable
+          kubectl exec -n argocd $ARGOCD_POD -- sh -c "
+            export ARGOCD_AUTH_TOKEN='$ARGOCD_AUTH_TOKEN'
+            argocd app sync infra-apps --server localhost:8080 --plaintext --prune || true
+            argocd app sync finance-service-staging --server localhost:8080 --plaintext --prune || true
+          "
           echo "✅ Staging sync triggered"
 
       - name: Wait for Healthy
+        env:
+          ARGOCD_AUTH_TOKEN: ${{ secrets.ARGOCD_TOKEN_STAGING }}
         run: |
           echo "⏳ Waiting for applications to be healthy..."
-          argocd app wait infra-apps --timeout 300 || true
-          argocd app wait finance-service-staging --timeout 300 || true
+          ARGOCD_POD="${{ steps.argocd.outputs.pod }}"
+          
+          kubectl exec -n argocd $ARGOCD_POD -- sh -c "
+            export ARGOCD_AUTH_TOKEN='$ARGOCD_AUTH_TOKEN'
+            argocd app wait infra-apps --server localhost:8080 --plaintext --timeout 300 || true
+            argocd app wait finance-service-staging --server localhost:8080 --plaintext --timeout 300 || true
+          "
           echo "✅ Applications healthy"
-
-      - name: Cleanup
-        if: always()
-        run: pkill -f "kubectl port-forward.*argocd" || true
 
   sync-production:
     name: Sync Production
@@ -89,47 +81,39 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install ArgoCD CLI
-        uses: ./.github/actions/install-argocd-cli
-
-      - name: Start Port Forward
+      - name: Get ArgoCD Pod
+        id: argocd
         run: |
-          echo "🔌 Starting port-forward to ArgoCD..."
-          pkill -f "kubectl port-forward.*argocd" || true
-          nohup kubectl port-forward svc/argocd-server -n argocd 8443:443 > /dev/null 2>&1 &
-          for i in {1..10}; do
-            if nc -z localhost 8443 2>/dev/null; then
-              echo "✅ Port-forward ready on localhost:8443"
-              break
-            fi
-            echo "⏳ Waiting for port-forward... ($i/10)"
-            sleep 1
-          done
-
-      - name: Login to ArgoCD
-        run: |
-          argocd login localhost:8443 \
-            --username admin \
-            --password ${{ secrets.ARGOCD_PASSWORD_PRODUCTION }} \
-            --insecure
+          ARGOCD_POD=$(kubectl get pods -n argocd -l app.kubernetes.io/name=argocd-server -o jsonpath='{.items[0].metadata.name}')
+          echo "pod=$ARGOCD_POD" >> $GITHUB_OUTPUT
 
       - name: Sync Applications
+        env:
+          ARGOCD_AUTH_TOKEN: ${{ secrets.ARGOCD_TOKEN_PRODUCTION }}
         run: |
           echo "🔄 Syncing production applications..."
-          argocd app sync infra-apps --prune
-          argocd app sync finance-service-production --prune
+          ARGOCD_POD="${{ steps.argocd.outputs.pod }}"
+          
+          kubectl exec -n argocd $ARGOCD_POD -- sh -c "
+            export ARGOCD_AUTH_TOKEN='$ARGOCD_AUTH_TOKEN'
+            argocd app sync infra-apps --server localhost:8080 --plaintext --prune
+            argocd app sync finance-service-production --server localhost:8080 --plaintext --prune
+          "
           echo "✅ Production sync triggered"
 
       - name: Wait for Healthy
+        env:
+          ARGOCD_AUTH_TOKEN: ${{ secrets.ARGOCD_TOKEN_PRODUCTION }}
         run: |
           echo "⏳ Waiting for applications to be healthy..."
-          argocd app wait infra-apps --timeout 300
-          argocd app wait finance-service-production --timeout 300
+          ARGOCD_POD="${{ steps.argocd.outputs.pod }}"
+          
+          kubectl exec -n argocd $ARGOCD_POD -- sh -c "
+            export ARGOCD_AUTH_TOKEN='$ARGOCD_AUTH_TOKEN'
+            argocd app wait infra-apps --server localhost:8080 --plaintext --timeout 300
+            argocd app wait finance-service-production --server localhost:8080 --plaintext --timeout 300
+          "
           echo "✅ Applications healthy"
-
-      - name: Cleanup
-        if: always()
-        run: pkill -f "kubectl port-forward.*argocd" || true
 
   sync-production-only:
     name: Sync Production (Direct)
@@ -141,44 +125,36 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install ArgoCD CLI
-        uses: ./.github/actions/install-argocd-cli
-
-      - name: Start Port Forward
+      - name: Get ArgoCD Pod
+        id: argocd
         run: |
-          echo "🔌 Starting port-forward to ArgoCD..."
-          pkill -f "kubectl port-forward.*argocd" || true
-          nohup kubectl port-forward svc/argocd-server -n argocd 8443:443 > /dev/null 2>&1 &
-          for i in {1..10}; do
-            if nc -z localhost 8443 2>/dev/null; then
-              echo "✅ Port-forward ready on localhost:8443"
-              break
-            fi
-            echo "⏳ Waiting for port-forward... ($i/10)"
-            sleep 1
-          done
-
-      - name: Login to ArgoCD
-        run: |
-          argocd login localhost:8443 \
-            --username admin \
-            --password ${{ secrets.ARGOCD_PASSWORD_PRODUCTION }} \
-            --insecure
+          ARGOCD_POD=$(kubectl get pods -n argocd -l app.kubernetes.io/name=argocd-server -o jsonpath='{.items[0].metadata.name}')
+          echo "pod=$ARGOCD_POD" >> $GITHUB_OUTPUT
 
       - name: Sync Applications
+        env:
+          ARGOCD_AUTH_TOKEN: ${{ secrets.ARGOCD_TOKEN_PRODUCTION }}
         run: |
           echo "🔄 Syncing production applications (direct)..."
-          argocd app sync infra-apps --prune
-          argocd app sync finance-service-production --prune
+          ARGOCD_POD="${{ steps.argocd.outputs.pod }}"
+          
+          kubectl exec -n argocd $ARGOCD_POD -- sh -c "
+            export ARGOCD_AUTH_TOKEN='$ARGOCD_AUTH_TOKEN'
+            argocd app sync infra-apps --server localhost:8080 --plaintext --prune
+            argocd app sync finance-service-production --server localhost:8080 --plaintext --prune
+          "
           echo "✅ Production sync triggered"
 
       - name: Wait for Healthy
+        env:
+          ARGOCD_AUTH_TOKEN: ${{ secrets.ARGOCD_TOKEN_PRODUCTION }}
         run: |
           echo "⏳ Waiting for applications to be healthy..."
-          argocd app wait infra-apps --timeout 300
-          argocd app wait finance-service-production --timeout 300
+          ARGOCD_POD="${{ steps.argocd.outputs.pod }}"
+          
+          kubectl exec -n argocd $ARGOCD_POD -- sh -c "
+            export ARGOCD_AUTH_TOKEN='$ARGOCD_AUTH_TOKEN'
+            argocd app wait infra-apps --server localhost:8080 --plaintext --timeout 300
+            argocd app wait finance-service-production --server localhost:8080 --plaintext --timeout 300
+          "
           echo "✅ Applications healthy"
-
-      - name: Cleanup
-        if: always()
-        run: pkill -f "kubectl port-forward.*argocd" || true
