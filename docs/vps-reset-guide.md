@@ -42,6 +42,10 @@ sudo systemctl status k3s
 
 # Lihat pods yang running
 sudo kubectl get pods -A
+
+# Cek apakah Traefik aktif (harus disabled untuk script ini)
+kubectl get pods -n kube-system | grep traefik
+
 ```
 
 ---
@@ -416,6 +420,65 @@ kubectl apply -k base/kubernetes-dashboard/
 
 # Apply alert rules (menggunakan kustomize)
 kubectl apply -k base/monitoring/alert-rules/
+
+### Step 9.2: Configure MinIO TLS (HTTPS)
+
+MinIO defaultnya HTTP. Untuk enable HTTPS di port 30090:
+
+1. **Create TLS Secret** (gunakan file `public.crt` dan `private.key` dari SSL Anda):
+   ```bash
+   # Upload file: public.crt & private.key ke VPS
+   
+   kubectl create secret generic minio-tls -n minio \
+     --from-file=public.crt=$HOME/public.crt \
+     --from-file=private.key=$HOME/private.key
+   ```
+
+2. **Patch MinIO Deployment** (Mount certs ke `/root/.minio/certs`):
+   ```bash
+   kubectl patch deployment minio -n minio --type='json' -p='[
+     {
+       "op": "add",
+       "path": "/spec/template/spec/volumes/-",
+       "value": {
+         "name": "minio-certs",
+         "secret": {
+           "secretName": "minio-tls",
+           "items": [
+             {"key": "public.crt", "path": "public.crt"},
+             {"key": "private.key", "path": "private.key"}
+           ]
+         }
+       }
+     },
+     {
+       "op": "add",
+       "path": "/spec/template/spec/containers/0/volumeMounts/-",
+       "value": {
+         "name": "minio-certs",
+         "mountPath": "/root/.minio/certs",
+         "readOnly": true
+       }
+     },
+     {
+       "op": "replace",
+       "path": "/spec/template/spec/containers/0/livenessProbe/httpGet/scheme",
+       "value": "HTTPS"
+     },
+     {
+       "op": "replace",
+       "path": "/spec/template/spec/containers/0/readinessProbe/httpGet/scheme",
+       "value": "HTTPS"
+     }
+   ]'
+   ```
+
+3. **Verify HTTPS**:
+   ```bash
+   kubectl rollout status deployment minio -n minio
+   kubectl logs -n minio -l app=minio --tail=20 | grep API
+   # Output harus: API: https://... (HTTPS)
+   ```
 ```
 
 ### Step 9.1: Create PostgreSQL Role untuk Exporter
@@ -473,21 +536,51 @@ kubectl -n argocd get secret argocd-initial-admin-secret \
 echo
 ```
 
-### Apply ArgoCD NodePort Service
-
-ArgoCD tidak mendukung sub-path routing dengan baik, jadi kita gunakan port khusus:
+ArgoCD membutuhkan konfigurasi rootpath agar bisa diakses via subpath `/argocd` di ingress.
 
 ```bash
-kubectl apply -k base/argocd/
+# 1. Tidak perlu apply base/argocd/ (karena NodePort tidak digunakan)
+# kubectl apply -k base/argocd/
 
-# Verifikasi service
-kubectl get svc -n argocd
-# Output: argocd-server-nodeport dengan NodePort 30443
+# 2. Fix ArgoCD URL (Rootpath)
+# PENTING: Agar ArgoCD bekerja di subpath /argocd tanpa rewrite
+cat <<EOF | kubectl apply -f -
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-cmd-params-cm
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: argocd-cmd-params-cm
+    app.kubernetes.io/part-of: argocd
+data:
+  server.insecure: "true"
+  server.rootpath: "/argocd"
+EOF
+
+# 3. Update URL Setting
+cat <<EOF | kubectl apply -f -
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-cm
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: argocd-cm
+    app.kubernetes.io/part-of: argocd
+data:
+  # Ganti domain sesuai environment (staging-goapps... atau goapps...)
+  url: "https://<DOMAIN>/argocd"
+EOF
+
+# 4. Restart ArgoCD Server
+kubectl rollout restart deployment argocd-server -n argocd
+kubectl rollout status deployment argocd-server -n argocd
 ```
 
-Akses ArgoCD via:
-- **Staging:** `https://staging-goapps.mutugading.com:30443`
-- **Production:** `https://goapps.mutugading.com:30443`
+Akses ArgoCD via Ingress (setelah Step 13):
+- **Staging:** `https://staging-goapps.mutugading.com/argocd`
+- **Production:** `https://goapps.mutugading.com/argocd`
 
 ---
 
@@ -544,6 +637,8 @@ Akses via browser (setelah DNS pointing):
 - Grafana: `https://staging-goapps.mutugading.com/grafana`
 - Prometheus: `https://staging-goapps.mutugading.com/prometheus`
 - ArgoCD: `https://staging-goapps.mutugading.com/argocd`
+- MinIO (Console): `https://staging-goapps.mutugading.com:30090` (Login: admin / password)
+
 
 ### Untuk PRODUCTION VPS:
 
@@ -557,9 +652,11 @@ kubectl get ingress -A
 ```
 
 Akses via browser (setelah DNS pointing):
-- Grafana: `https://goapps.mutugading.com/grafana`
-- Prometheus: `https://goapps.mutugading.com/prometheus` (dengan Basic Auth)
+- Grafana: `https://goapps.mutugading.com/grafana` (Tanpa auth popup - Fixed)
+- Prometheus: `https://goapps.mutugading.com/prometheus` (Protected by Basic Auth: user `goapps` / password prom secret)
 - ArgoCD: `https://goapps.mutugading.com/argocd`
+- MinIO (Console): `https://goapps.mutugading.com:30090` (Login: user `minio-secret` password)
+
 
 ---
 
@@ -641,21 +738,7 @@ Setelah NGINX Ingress terinstall dan DNS pointing:
 - Staging: `https://staging-goapps.mutugading.com/grafana`
 - Production: `https://goapps.mutugading.com/grafana`
 
-### Access ArgoCD (Port Forward)
-
-```bash
-# SSH Tunnel dari komputer lokal:
-# Untuk STAGING:
-ssh -L 8080:localhost:8080 deploy@staging-goapps.mutugading.com "kubectl port-forward svc/argocd-server -n argocd 8080:443"
-
-# Untuk PRODUCTION:
-ssh -L 8080:localhost:8080 deploy@goapps.mutugading.com "kubectl port-forward svc/argocd-server -n argocd 8080:443"
-
-# Buka browser di lokal: https://localhost:8080
-# Login: admin / <ARGOCD_PASSWORD>
-```
-
-Alternatif via Ingress:
+Alternatif via Ingress (Recommended):
 - Staging: `https://staging-goapps.mutugading.com/argocd`
 - Production: `https://goapps.mutugading.com/argocd`
 
