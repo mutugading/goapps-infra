@@ -73,12 +73,18 @@ jobs:
       - name: Install ArgoCD CLI
         uses: ./.github/actions/install-argocd-cli
 
+      - name: Start Port Forward
+        run: |
+          echo "🔌 Starting port-forward to ArgoCD..."
+          kubectl port-forward svc/argocd-server -n argocd 8443:443 &
+          sleep 3
+          echo "✅ Port-forward ready on localhost:8443"
+
       - name: Login to ArgoCD
         run: |
-          argocd login ${{ secrets.ARGOCD_SERVER_PRODUCTION }} \
+          argocd login localhost:8443 \
             --username admin \
             --password ${{ secrets.ARGOCD_PASSWORD_PRODUCTION }} \
-            --grpc-web \
             --insecure
 
       - name: Sync Applications
@@ -110,12 +116,18 @@ jobs:
       - name: Install ArgoCD CLI
         uses: ./.github/actions/install-argocd-cli
 
+      - name: Start Port Forward
+        run: |
+          echo "🔌 Starting port-forward to ArgoCD..."
+          kubectl port-forward svc/argocd-server -n argocd 8443:443 &
+          sleep 3
+          echo "✅ Port-forward ready on localhost:8443"
+
       - name: Login to ArgoCD
         run: |
-          argocd login ${{ secrets.ARGOCD_SERVER_PRODUCTION }} \
+          argocd login localhost:8443 \
             --username admin \
             --password ${{ secrets.ARGOCD_PASSWORD_PRODUCTION }} \
-            --grpc-web \
             --insecure
 
       - name: Sync Applications
