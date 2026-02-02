@@ -39,7 +39,7 @@ spec:
                   fieldPath: metadata.namespace
             # Database config - matches Go app config.go bindings
             - name: DATABASE_HOST
-              value: "pgbouncer.database.svc.cluster.local"
+              value: "postgres.database.svc.cluster.local"
             - name: DATABASE_PORT
               value: "5432"
             - name: DATABASE_NAME
