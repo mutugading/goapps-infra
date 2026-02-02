@@ -1,0 +1,46 @@
+# ArgoCD Application - Frontend Staging
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: frontend-staging
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: goapps
+  source:
+    repoURL: https://github.com/mutugading/goapps-infra.git
+    targetRevision: main
+    path: services/frontend/overlays/staging
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: goapps-staging
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+---
+# ArgoCD Application - Frontend Production
+# NOTE: Manual sync required for production safety
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: frontend-production
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: goapps
+  source:
+    repoURL: https://github.com/mutugading/goapps-infra.git
+    targetRevision: main
+    path: services/frontend/overlays/production
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: goapps-production
+  syncPolicy:
+    # No automated sync for production - manual approval required
+    syncOptions:
+      - CreateNamespace=true

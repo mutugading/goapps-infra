@@ -1,0 +1,20 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: frontend
+spec:
+  tls:
+    - hosts:
+        - staging-goapps.mutugading.com
+      secretName: goapps-tls
+  rules:
+    - host: staging-goapps.mutugading.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  number: 80
