@@ -91,3 +91,37 @@ alertmanager:
   alertmanagerSpec:
     externalUrl: "https://goapps.mutugading.com/alertmanager"
     routePrefix: "/alertmanager"
+
+# ========================================
+# Kubelet / cAdvisor Configuration for K3s
+# Required for container_cpu_usage_seconds_total,
+# container_memory_usage_bytes metrics
+# ========================================
+kubelet:
+  enabled: true
+  serviceMonitor:
+    # K3s uses different endpoint configurations
+    https: true
+    cAdvisor: true
+    probes: true
+    resource: true
+    # Relabeling to work with K3s
+    cAdvisorRelabelings:
+      - sourceLabels: [__metrics_path__]
+        targetLabel: metrics_path
+    relabelings:
+      - sourceLabels: [__metrics_path__]
+        targetLabel: metrics_path
+
+# ========================================
+# Disable K3s-incompatible components
+# K3s runs control plane as single binary
+# ========================================
+kubeControllerManager:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeEtcd:
+  enabled: false
+kubeProxy:
+  enabled: false
