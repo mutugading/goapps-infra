@@ -13,4 +13,4 @@ patches:
 
 images:
   - name: ghcr.io/mutugading/goapps-frontend
-    newTag: main  # Use main branch tag (pushed by CI)
+    newTag: latest  # CI pushes :latest and :sha tags
