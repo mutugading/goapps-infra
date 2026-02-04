@@ -1,5 +1,22 @@
 # PostgreSQL Prometheus Exporter
 # Exports PostgreSQL metrics for Grafana monitoring
+
+# ConfigMap for custom queries
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-exporter-queries
+  namespace: database
+data:
+  queries.yaml: |
+    pg_postmaster:
+      query: "SELECT pg_postmaster_start_time as start_time_seconds from pg_postmaster_start_time()"
+      master: true
+      metrics:
+        - start_time_seconds:
+            usage: "GAUGE"
+            description: "Time at which postmaster started"
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -23,6 +40,8 @@ spec:
       containers:
         - name: postgres-exporter
           image: prometheuscommunity/postgres-exporter:v0.15.0
+          args:
+            - "--extend.query-path=/etc/postgres-exporter/queries.yaml"
           ports:
             - containerPort: 9187
               name: metrics
@@ -46,6 +65,10 @@ spec:
             limits:
               memory: "64Mi"
               cpu: "100m"
+          volumeMounts:
+            - name: queries
+              mountPath: /etc/postgres-exporter
+              readOnly: true
           livenessProbe:
             httpGet:
               path: /
@@ -58,6 +81,10 @@ spec:
               port: 9187
             initialDelaySeconds: 10
             periodSeconds: 5
+      volumes:
+        - name: queries
+          configMap:
+            name: postgres-exporter-queries
 ---
 apiVersion: v1
 kind: Service
