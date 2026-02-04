@@ -1,9 +1,8 @@
 # MinIO environment patch for Staging
-# Sets the correct environment variables for sub-path routing
+# Sets the correct environment variables for direct port access (not subpath)
 # 
 # Required variables:
-# - MINIO_BROWSER_REDIRECT_URL: Full URL for browser redirects
-# - MINIO_CONSOLE_SUBPATH: The sub-path where console is served
+# - MINIO_BROWSER_REDIRECT_URL: Full URL for browser redirects (with port)
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -16,6 +15,4 @@ spec:
         - name: minio
           env:
             - name: MINIO_BROWSER_REDIRECT_URL
-              value: "https://staging-goapps.mutugading.com/minio/"
-            - name: MINIO_CONSOLE_SUBPATH
-              value: "/minio"
+              value: "https://staging-goapps.mutugading.com:30090/"
