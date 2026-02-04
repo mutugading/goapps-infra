@@ -292,7 +292,7 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "pg_postmaster_start_time_seconds",
+                    "expr": "time() - pg_postmaster_start_time_seconds",
                     "refId": "A"
                 }
             ],

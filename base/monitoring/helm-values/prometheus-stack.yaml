@@ -43,6 +43,23 @@ grafana:
     server:
       root_url: "%(protocol)s://%(domain)s/grafana/"
       serve_from_sub_path: true
+    smtp:
+      enabled: true
+      host: mail.mutugading.com:465
+      user: mgtalert@mutugading.com
+      # Password from secret (see envValueFrom below)
+      from_address: mgtalert@mutugading.com
+      from_name: "GoApps Monitoring"
+      # For SSL on port 465
+      skip_verify: false
+      startTLS_policy: NoStartTLS
+
+  # Load SMTP password from Kubernetes Secret
+  envValueFrom:
+    GF_SMTP_PASSWORD:
+      secretKeyRef:
+        name: grafana-smtp-secret
+        key: password
 
   # ========================================
   # Dashboard Provisioning via ConfigMaps
