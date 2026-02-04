@@ -128,11 +128,11 @@
                 },
                 "textMode": "auto"
             },
-            "title": "CPU Usage (go-apps)",
+            "title": "CPU Usage (Namespace)",
             "type": "stat",
             "targets": [
                 {
-                    "expr": "avg(rate(container_cpu_usage_seconds_total{namespace=\"$namespace\"}[5m])) * 100",
+                    "expr": "avg(rate(container_cpu_usage_seconds_total{namespace=\"$namespace\", container!=\"\", container!=\"POD\"}[5m])) * 100",
                     "refId": "A"
                 }
             ]
@@ -157,11 +157,11 @@
                             },
                             {
                                 "color": "yellow",
-                                "value": 70
+                                "value": 500
                             },
                             {
                                 "color": "red",
-                                "value": 90
+                                "value": 1000
                             }
                         ]
                     },
@@ -189,7 +189,7 @@
                 },
                 "textMode": "auto"
             },
-            "title": "Memory Usage (go-apps)",
+            "title": "Memory Usage (Namespace)",
             "type": "stat",
             "targets": [
                 {
@@ -246,7 +246,7 @@
             "type": "stat",
             "targets": [
                 {
-                    "expr": "kube_horizontalpodautoscaler_status_current_replicas{namespace=\"$namespace\"}",
+                    "expr": "sum(kube_horizontalpodautoscaler_status_current_replicas{namespace=\"$namespace\"})",
                     "refId": "A"
                 }
             ]
@@ -261,7 +261,7 @@
             },
             "id": 6,
             "panels": [],
-            "title": "export-svc Metrics",
+            "title": "Service Metrics - $service",
             "type": "row"
         },
         {
@@ -326,22 +326,25 @@
             "id": 7,
             "options": {
                 "legend": {
-                    "calcs": [],
-                    "displayMode": "list",
+                    "calcs": [
+                        "mean",
+                        "max"
+                    ],
+                    "displayMode": "table",
                     "placement": "bottom",
                     "showLegend": true
                 },
                 "tooltip": {
-                    "mode": "single",
-                    "sort": "none"
+                    "mode": "multi",
+                    "sort": "desc"
                 }
             },
             "title": "Pod CPU Usage",
             "type": "timeseries",
             "targets": [
                 {
-                    "expr": "rate(container_cpu_usage_seconds_total{namespace=\"$namespace\", pod!=\"\", container!=\"\", container!=\"POD\"}[5m]) * 1000",
-                    "legendFormat": "{{pod}}",
+                    "expr": "rate(container_cpu_usage_seconds_total{namespace=\"$namespace\", pod=~\"$service.*\", container!=\"\", container!=\"POD\"}[5m]) * 1000",
+                    "legendFormat": "{{pod}} - {{container}}",
                     "refId": "A"
                 }
             ]
@@ -408,22 +411,25 @@
             "id": 8,
             "options": {
                 "legend": {
-                    "calcs": [],
-                    "displayMode": "list",
+                    "calcs": [
+                        "mean",
+                        "max"
+                    ],
+                    "displayMode": "table",
                     "placement": "bottom",
                     "showLegend": true
                 },
                 "tooltip": {
-                    "mode": "single",
-                    "sort": "none"
+                    "mode": "multi",
+                    "sort": "desc"
                 }
             },
             "title": "Pod Memory Usage",
             "type": "timeseries",
             "targets": [
                 {
-                    "expr": "container_memory_usage_bytes{namespace=\"$namespace\", pod!=\"\", container!=\"\", container!=\"POD\"}",
-                    "legendFormat": "{{pod}}",
+                    "expr": "container_memory_usage_bytes{namespace=\"$namespace\", pod=~\"$service.*\", container!=\"\", container!=\"POD\"}",
+                    "legendFormat": "{{pod}} - {{container}}",
                     "refId": "A"
                 }
             ]
@@ -597,8 +603,10 @@
             "id": 11,
             "options": {
                 "legend": {
-                    "calcs": [],
-                    "displayMode": "list",
+                    "calcs": [
+                        "last"
+                    ],
+                    "displayMode": "table",
                     "placement": "bottom",
                     "showLegend": true
                 },
@@ -611,7 +619,7 @@
             "type": "timeseries",
             "targets": [
                 {
-                    "expr": "kube_pod_container_status_restarts_total{namespace=\"$namespace\"}",
+                    "expr": "kube_pod_container_status_restarts_total{namespace=\"$namespace\", pod=~\"$service.*\"}",
                     "legendFormat": "{{pod}}",
                     "refId": "A"
                 }
@@ -655,6 +663,40 @@
                 "queryValue": "",
                 "skipUrlSync": false,
                 "type": "custom"
+            },
+            {
+                "current": {
+                    "selected": true,
+                    "text": "All",
+                    "value": "$__all"
+                },
+                "hide": 0,
+                "includeAll": true,
+                "allValue": ".*",
+                "label": "Service",
+                "multi": false,
+                "name": "service",
+                "options": [
+                    {
+                        "selected": true,
+                        "text": "All",
+                        "value": "$__all"
+                    },
+                    {
+                        "selected": false,
+                        "text": "finance-service",
+                        "value": "finance-service"
+                    },
+                    {
+                        "selected": false,
+                        "text": "frontend",
+                        "value": "frontend"
+                    }
+                ],
+                "query": "finance-service,frontend",
+                "queryValue": "",
+                "skipUrlSync": false,
+                "type": "custom"
             }
         ]
     },
@@ -666,5 +708,5 @@
     "timezone": "browser",
     "title": "Go Apps Microservices",
     "uid": "go-apps-overview",
-    "version": 1
+    "version": 2
 }
