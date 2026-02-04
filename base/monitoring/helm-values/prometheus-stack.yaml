@@ -24,6 +24,19 @@ grafana:
       - ReadWriteOnce
 
   # ========================================
+  # Fix init-chown-data permission denied on PVC
+  # https://github.com/grafana/helm-charts/issues/1256
+  # ========================================
+  initChownData:
+    enabled: false
+  
+  # Run as Grafana user (UID 472)
+  securityContext:
+    runAsUser: 472
+    runAsGroup: 472
+    fsGroup: 472
+
+  # ========================================
   # Sub-path configuration for /grafana
   # ========================================
   "grafana.ini":
