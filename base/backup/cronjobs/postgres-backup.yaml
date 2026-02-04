@@ -110,7 +110,7 @@ spec:
                       name: postgres-secret
                       key: POSTGRES_PASSWORD
                 - name: MINIO_ENDPOINT
-                  value: "minio.minio:9000"
+                  value: "minio.database:9000"
                 - name: MINIO_ACCESS_KEY
                   valueFrom:
                     secretKeyRef:
@@ -200,7 +200,7 @@ spec:
                       name: postgres-secret
                       key: POSTGRES_PASSWORD
                 - name: MINIO_ENDPOINT
-                  value: "minio.minio:9000"
+                  value: "minio.database:9000"
                 - name: MINIO_ACCESS_KEY
                   valueFrom:
                     secretKeyRef:
@@ -290,7 +290,7 @@ spec:
                       name: postgres-secret
                       key: POSTGRES_PASSWORD
                 - name: MINIO_ENDPOINT
-                  value: "minio.minio:9000"
+                  value: "minio.database:9000"
                 - name: MINIO_ACCESS_KEY
                   valueFrom:
                     secretKeyRef:
