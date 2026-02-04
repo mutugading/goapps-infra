@@ -35,8 +35,14 @@ data:
     # Upload to MinIO (local)
     if [ -n "${MINIO_ENDPOINT}" ]; then
       echo "[$(date)] Uploading to MinIO..."
-      mc alias set minio http://${MINIO_ENDPOINT} ${MINIO_ACCESS_KEY} ${MINIO_SECRET_KEY} --api S3v4
-      mc cp "${BACKUP_FILE}" minio/postgres-backups/
+      # Use HTTPS if MINIO_USE_SSL is set to true, otherwise use HTTP
+      if [ "${MINIO_USE_SSL}" = "true" ]; then
+        mc alias set minio https://${MINIO_ENDPOINT} ${MINIO_ACCESS_KEY} ${MINIO_SECRET_KEY} --api S3v4 --insecure
+        mc cp "${BACKUP_FILE}" minio/postgres-backups/ --insecure
+      else
+        mc alias set minio http://${MINIO_ENDPOINT} ${MINIO_ACCESS_KEY} ${MINIO_SECRET_KEY} --api S3v4
+        mc cp "${BACKUP_FILE}" minio/postgres-backups/
+      fi
       echo "[$(date)] Uploaded to MinIO"
     fi
     
@@ -117,6 +123,8 @@ spec:
                       name: minio-secret
                       key: MINIO_ROOT_PASSWORD
                       optional: true
+                - name: MINIO_USE_SSL
+                  value: "true"
                 - name: S3_ENDPOINT
                   valueFrom:
                     secretKeyRef:
@@ -205,6 +213,8 @@ spec:
                       name: minio-secret
                       key: MINIO_ROOT_PASSWORD
                       optional: true
+                - name: MINIO_USE_SSL
+                  value: "true"
                 - name: S3_ENDPOINT
                   valueFrom:
                     secretKeyRef:
@@ -293,6 +303,8 @@ spec:
                       name: minio-secret
                       key: MINIO_ROOT_PASSWORD
                       optional: true
+                - name: MINIO_USE_SSL
+                  value: "true"
                 - name: S3_ENDPOINT
                   valueFrom:
                     secretKeyRef:
