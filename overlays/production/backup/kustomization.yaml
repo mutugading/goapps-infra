@@ -1,0 +1,65 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Production Environment Backup Overlay
+# Backup paths:
+#   - PostgreSQL: /goapps-backup/postgres
+#   - MinIO: /goapps-backup/minio (via /mnt/goapps-backup)
+
+namespace: database
+
+resources:
+  - ../../../base/backup
+
+patches:
+  # ===== PostgreSQL Backup Patches =====
+  # Patch backup path for production VPS - Morning backup
+  - target:
+      kind: CronJob
+      name: postgres-backup-morning
+    patch: |-
+      - op: replace
+        path: /spec/jobTemplate/spec/template/spec/containers/0/env/0/value
+        value: "production"
+      - op: replace
+        path: /spec/jobTemplate/spec/template/spec/volumes/0/hostPath/path
+        value: "/goapps-backup/postgres"
+
+  # Patch backup path for production VPS - Afternoon backup
+  - target:
+      kind: CronJob
+      name: postgres-backup-afternoon
+    patch: |-
+      - op: replace
+        path: /spec/jobTemplate/spec/template/spec/containers/0/env/0/value
+        value: "production"
+      - op: replace
+        path: /spec/jobTemplate/spec/template/spec/volumes/0/hostPath/path
+        value: "/goapps-backup/postgres"
+
+  # Patch backup path for production VPS - Night backup
+  - target:
+      kind: CronJob
+      name: postgres-backup-night
+    patch: |-
+      - op: replace
+        path: /spec/jobTemplate/spec/template/spec/containers/0/env/0/value
+        value: "production"
+      - op: replace
+        path: /spec/jobTemplate/spec/template/spec/volumes/0/hostPath/path
+        value: "/goapps-backup/postgres"
+
+  # ===== MinIO Backup Patches =====
+  # Patch MinIO backup for production environment
+  # Note: MinIO backup uses /mnt/goapps-backup which is the base config (no change needed)
+  # But we explicitly set it here for clarity and consistency
+  - target:
+      kind: CronJob
+      name: minio-backup-to-disk
+    patch: |-
+      - op: replace
+        path: /spec/jobTemplate/spec/template/spec/containers/0/env/0/value
+        value: "production"
+      - op: replace
+        path: /spec/jobTemplate/spec/template/spec/volumes/0/hostPath/path
+        value: "/goapps-backup"

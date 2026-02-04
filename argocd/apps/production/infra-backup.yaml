@@ -1,8 +1,9 @@
-# ArgoCD Application - Infrastructure Database
+# ArgoCD Application - Infrastructure Backup (Production)
+# Uses production overlay with /goapps-backup paths
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: infra-database
+  name: infra-backup
   namespace: argocd
   finalizers:
     - resources-finalizer.argocd.argoproj.io
@@ -11,7 +12,7 @@ spec:
   source:
     repoURL: https://github.com/mutugading/goapps-infra.git
     targetRevision: main
-    path: base/database
+    path: overlays/production/backup
   destination:
     server: https://kubernetes.default.svc
     namespace: database
@@ -21,6 +22,3 @@ spec:
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
-# NOTE: infra-backup Application has been moved to environment-specific files:
-# - argocd/apps/staging/infra-backup.yaml (uses overlays/staging/backup)
-# - argocd/apps/production/infra-backup.yaml (uses overlays/production/backup)
