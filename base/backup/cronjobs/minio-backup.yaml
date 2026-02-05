@@ -77,7 +77,7 @@ spec:
                       name: minio-secret
                       key: MINIO_ROOT_PASSWORD
                 - name: MINIO_USE_SSL
-                  value: "false"
+                  value: "true"
               volumeMounts:
                 - name: backup-storage
                   mountPath: /backup
