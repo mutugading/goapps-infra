@@ -978,7 +978,7 @@ All PRs use the standard template: [PULL_REQUEST_TEMPLATE.md](.github/PULL_REQUE
 ## Support & Contact
 
 - **Team**: GoApps DevOps
-- **Organization**: PT Mutugading Tekstil
+- **Organization**: PT Mutu Gading Tekstil
 - **Repository Issues**: [GitHub Issues](https://github.com/mutugading/goapps-infra/issues)
 
 ---
@@ -987,4 +987,4 @@ All PRs use the standard template: [PULL_REQUEST_TEMPLATE.md](.github/PULL_REQUE
 
 This project is proprietary software. See the [LICENSE](./LICENSE) file for details.
 
-**© 2024-2026 PT Mutugading Tekstil. All Rights Reserved.**
+**© 2024-2026 PT Mutu Gading Tekstil. All Rights Reserved.**
