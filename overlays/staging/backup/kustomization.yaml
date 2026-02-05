@@ -61,3 +61,6 @@ patches:
       - op: replace
         path: /spec/jobTemplate/spec/template/spec/volumes/0/hostPath/path
         value: "/staging-goapps-backup"
+      - op: replace
+        path: /spec/jobTemplate/spec/template/spec/containers/0/env/5/value
+        value: "postgres-backups export-files goapps-staging"

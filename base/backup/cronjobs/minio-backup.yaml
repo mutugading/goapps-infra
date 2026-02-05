@@ -40,10 +40,8 @@ spec:
                     MC_OPTS=""
                   fi
                   
-                  # Backup buckets to VPS disk
-                  BUCKETS="postgres-backups export-files"
-                  
-                  for bucket in $BUCKETS; do
+                  # Backup buckets to VPS disk (from MINIO_BUCKETS env var)
+                  for bucket in ${MINIO_BUCKETS}; do
                     if mc ls minio/${bucket} ${MC_OPTS} &>/dev/null; then
                       echo "[$(date)] Backing up bucket: ${bucket}"
                       mc mirror --overwrite ${MC_OPTS} minio/${bucket} /backup/minio/${bucket}/
@@ -78,6 +76,8 @@ spec:
                       key: MINIO_ROOT_PASSWORD
                 - name: MINIO_USE_SSL
                   value: "true"
+                - name: MINIO_BUCKETS
+                  value: "postgres-backups export-files"
               volumeMounts:
                 - name: backup-storage
                   mountPath: /backup
