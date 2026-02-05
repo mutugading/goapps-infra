@@ -1,10 +1,10 @@
 # Infrastructure Development Rules
 
-Panduan dan aturan untuk semua developer yang bekerja dengan `goapps-infra`.
+Guidelines and rules for all developers working with `goapps-infra`.
 
 ---
 
-## 📋 Daftar Isi
+## 📋 Table of Contents
 
 1. [Golden Rules](#golden-rules)
 2. [Naming Conventions](#naming-conventions)
@@ -17,21 +17,21 @@ Panduan dan aturan untuk semua developer yang bekerja dengan `goapps-infra`.
 9. [Security Policies](#security-policies)
 10. [Git Workflow](#git-workflow)
 11. [Emergency Procedures](#emergency-procedures)
-12. [Checklist](#checklist)
+12. [Checklists](#checklists)
 
 ---
 
 ## Golden Rules
 
-> ⚠️ **Aturan yang TIDAK BOLEH dilanggar!**
+> ⚠️ **Rules that MUST NOT be violated!**
 
 ### 1. Never Commit Secrets
 
 ```bash
-# ❌ WRONG - Jangan pernah!
+# ❌ WRONG - Never do this!
 git add secrets/production-credentials.yaml
 
-# ✅ CORRECT - Buat secrets manual di cluster
+# ✅ CORRECT - Create secrets manually in cluster
 kubectl create secret generic postgres-secret -n database \
   --from-literal=POSTGRES_PASSWORD='<password>'
 ```
@@ -39,26 +39,26 @@ kubectl create secret generic postgres-secret -n database \
 ### 2. Always Test in Staging First
 
 ```bash
-# ✅ Urutan yang benar:
-1. Deploy ke staging
-2. Verify di staging (min 24 jam)
-3. Deploy ke production (dengan approval)
+# ✅ Correct order:
+1. Deploy to staging
+2. Verify in staging (minimum 24 hours)
+3. Deploy to production (with approval)
 ```
 
 ### 3. Document All Changes
 
-- Update README jika ada perubahan arsitektur
-- Buat/update runbook untuk prosedur baru
-- Comment di PR untuk perubahan non-obvious
+- Update README for architecture changes
+- Create/update runbooks for new procedures
+- Comment on PRs for non-obvious changes
 
 ### 4. Use Kustomize Overlays
 
 ```bash
-# ❌ WRONG - Jangan duplikasi manifests
+# ❌ WRONG - Don't duplicate manifests
 services/new-service/staging/deployment.yaml
 services/new-service/production/deployment.yaml
 
-# ✅ CORRECT - Gunakan base + overlays + patches
+# ✅ CORRECT - Use base + overlays + patches
 services/new-service/
 ├── base/
 │   └── deployment.yaml
@@ -71,10 +71,10 @@ services/new-service/
 
 ### 5. Follow Naming Conventions
 
-Konsistensi naming sangat penting untuk:
-- Debugging dan troubleshooting
+Consistent naming is essential for:
+- Debugging and troubleshooting
 - ArgoCD application matching
-- Monitoring dan alerting
+- Monitoring and alerting
 - Documentation
 
 ---
@@ -85,7 +85,7 @@ Konsistensi naming sangat penting untuk:
 
 | Resource | Pattern | Example |
 |----------|---------|---------|
-| Namespace | `<purpose>` atau `<app>-<env>` | `database`, `monitoring`, `goapps-staging` |
+| Namespace | `<purpose>` or `<app>-<env>` | `database`, `monitoring`, `goapps-staging` |
 | Deployment | `<service-name>` | `finance-service`, `frontend` |
 | StatefulSet | `<app-name>` | `postgres`, `rabbitmq` |
 | Service | `<deployment-name>` | `finance-service`, `postgres` |
@@ -107,7 +107,7 @@ Konsistensi naming sangat penting untuk:
 
 ### Labels
 
-Semua resources HARUS memiliki labels berikut:
+All resources MUST have these labels:
 
 ```yaml
 labels:
@@ -147,11 +147,11 @@ annotations:
 Format: `<type>(<scope>): <description>`
 
 Types:
-- `feat`: Fitur baru
+- `feat`: New feature
 - `fix`: Bug fix
-- `docs`: Dokumentasi
+- `docs`: Documentation
 - `chore`: Maintenance
-- `refactor`: Refactoring tanpa fitur baru
+- `refactor`: Refactoring without new features
 - `perf`: Performance improvement
 
 Examples:
@@ -171,10 +171,10 @@ chore(deps): upgrade prometheus stack to 67.0.0
 ```
 base/<component>/
 ├── kustomization.yaml    # Required - lists all resources
-├── deployment.yaml       # atau statefulset.yaml
+├── deployment.yaml       # or statefulset.yaml
 ├── service.yaml
 ├── configmap.yaml        # Optional
-└── pvc.yaml              # Optional jika perlu storage
+└── pvc.yaml              # Optional if storage needed
 ```
 
 ### Overlays Directory
@@ -211,10 +211,10 @@ services/<service-name>/
 
 ### Rules
 
-1. **Jangan taruh resources di root directory** - Semua harus dalam subdirectory yang sesuai
-2. **Setiap directory harus punya kustomization.yaml** - Untuk Kustomize build
-3. **Base tidak boleh reference environment-specific values** - Gunakan overlays
-4. **Patches harus minimal** - Hanya override yang diperlukan
+1. **Don't put resources in root directory** - Everything must be in appropriate subdirectories
+2. **Every directory must have kustomization.yaml** - For Kustomize build
+3. **Base must not reference environment-specific values** - Use overlays
+4. **Patches must be minimal** - Only override what's necessary
 
 ---
 
@@ -272,7 +272,7 @@ spec:
   replicas: 2
 ```
 
-### JSON Patch (untuk perubahan yang lebih spesifik)
+### JSON Patch (for more specific changes)
 
 ```yaml
 # patches/env-patch.yaml
@@ -570,7 +570,7 @@ kubectl rollout restart statefulset/postgres -n database
 
 ### Connection via PgBouncer
 
-Semua services HARUS connect melalui PgBouncer:
+All services MUST connect through PgBouncer:
 
 ```yaml
 # ✅ CORRECT
@@ -588,10 +588,10 @@ env:
 
 ### Database Migrations
 
-Migrations dijalankan dari service, bukan dari infra repo:
+Migrations are run from services, not from infra repo:
 
 ```bash
-# Di goapps-backend/services/finance
+# In goapps-backend/services/finance
 make migrate-up
 ```
 
@@ -601,8 +601,8 @@ make migrate-up
 
 ### Adding New Dashboard
 
-1. Create JSON file di `base/monitoring/dashboards/`
-2. Buat ConfigMap dengan label `grafana_dashboard: "1"`
+1. Create JSON file in `base/monitoring/dashboards/`
+2. Create ConfigMap with label `grafana_dashboard: "1"`
 
 ```yaml
 apiVersion: v1
@@ -620,7 +620,7 @@ data:
     }
 ```
 
-3. Grafana sidecar akan auto-load dashboard
+3. Grafana sidecar will auto-load the dashboard
 
 ### Adding New Alert
 
@@ -689,10 +689,10 @@ spec:
 
 ### Adding New Backup Target
 
-Tambahkan ke `base/backup/cronjobs/postgres-backup.yaml`:
+Add to `base/backup/cronjobs/postgres-backup.yaml`:
 
 ```yaml
-# Di backup.sh script, tambahkan:
+# In backup.sh script, add:
 if [ -n "${NEW_BACKUP_ENDPOINT}" ]; then
   echo "[$(date)] Uploading to new backup target..."
   mc alias set newbackup https://${NEW_BACKUP_ENDPOINT} ${ACCESS_KEY} ${SECRET_KEY}
@@ -702,7 +702,7 @@ fi
 
 ### Restore Testing
 
-Lakukan minimal 1x per bulan di staging:
+Perform at least once per month on staging:
 
 ```bash
 # 1. Get latest backup
@@ -742,7 +742,7 @@ kubectl exec -it postgres-0 -n database -- \
 
 ### Network Policies
 
-Services HARUS define NetworkPolicy:
+Services MUST define NetworkPolicy:
 
 ```yaml
 apiVersion: networking.k8s.io/v1
@@ -782,9 +782,9 @@ spec:
 
 ### Image Security
 
-- Semua images HARUS dari trusted registry (ghcr.io/mutugading)
-- Gunakan specific tag, bukan `latest` di production
-- Scan images dengan Trivy di CI
+- All images MUST be from trusted registry (ghcr.io/mutugading)
+- Use specific tags, not `latest` in production
+- Scan images with Trivy in CI
 
 ---
 
@@ -907,7 +907,7 @@ kubectl rollout undo deployment/<name> -n <namespace> --to-revision=2
 
 ---
 
-## Checklist
+## Checklists
 
 ### Before Merge to Main
 

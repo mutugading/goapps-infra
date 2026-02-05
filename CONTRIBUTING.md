@@ -1,14 +1,14 @@
 # Contributing to goapps-infra
 
-Terima kasih atas minat Anda untuk berkontribusi ke `goapps-infra`! Dokumen ini berisi panduan lengkap untuk berkontribusi ke repository infrastructure.
+Thank you for your interest in contributing to `goapps-infra`! This document contains complete guidelines for contributing to the infrastructure repository.
 
 ---
 
-## 📋 Daftar Isi
+## 📋 Table of Contents
 
 1. [Getting Started](#getting-started)
 2. [Development Environment](#development-environment)
-3. [Workflow Kontribusi](#workflow-kontribusi)
+3. [Contribution Workflow](#contribution-workflow)
 4. [Pull Request Guidelines](#pull-request-guidelines)
 5. [Code Review Process](#code-review-process)
 6. [Testing Requirements](#testing-requirements)
@@ -23,14 +23,14 @@ Terima kasih atas minat Anda untuk berkontribusi ke `goapps-infra`! Dokumen ini 
 
 ### Prerequisites
 
-Sebelum berkontribusi, pastikan Anda memiliki:
+Before contributing, make sure you have:
 
 1. **Git** - Version control
 2. **kubectl** - Kubernetes CLI
 3. **kustomize** - Kubernetes configuration management
-4. **helm** - Package manager untuk Kubernetes
+4. **helm** - Package manager for Kubernetes
 5. **yamllint** - YAML linter
-6. **Editor** - VSCode dengan extensions (YAML, Kubernetes)
+6. **Editor** - VSCode with extensions (YAML, Kubernetes)
 
 ### Install Tools
 
@@ -57,12 +57,12 @@ pip install yamllint
 git clone https://github.com/mutugading/goapps-infra.git
 cd goapps-infra
 
-# Atau via SSH
+# Or via SSH
 git clone git@github.com:mutugading/goapps-infra.git
 cd goapps-infra
 ```
 
-### VSCode Extensions yang Direkomendasikan
+### Recommended VSCode Extensions
 
 ```json
 {
@@ -81,7 +81,7 @@ cd goapps-infra
 
 ### Local Validation
 
-Sebelum commit, selalu validasi manifests:
+Before committing, always validate manifests:
 
 ```bash
 # Validate all kustomizations
@@ -98,14 +98,14 @@ yamllint -c .yamllint.yml .
 
 ### Local Kubernetes (Optional)
 
-Untuk testing lokal, Anda bisa menggunakan:
+For local testing, you can use:
 
 - **minikube**: `minikube start`
 - **kind**: `kind create cluster`
 - **k3d**: `k3d cluster create`
 
 ```bash
-# Create local cluster dengan kind
+# Create local cluster with kind
 kind create cluster --name goapps-dev
 
 # Apply manifests
@@ -118,37 +118,37 @@ kind delete cluster --name goapps-dev
 
 ---
 
-## Workflow Kontribusi
+## Contribution Workflow
 
 ### 1. Create Issue (Recommended)
 
-Untuk perubahan besar atau bug reports, gunakan issue templates yang tersedia:
+For major changes or bug reports, use the available issue templates:
 
-| Template | Penggunaan |
-|----------|------------|
-| [🐛 Bug Report](../../.github/ISSUE_TEMPLATE/bug_report.md) | Laporkan bug atau masalah infrastructure |
-| [✨ Feature Request](../../.github/ISSUE_TEMPLATE/feature_request.md) | Request fitur atau enhancement |
-| [🚀 New Service](../../.github/ISSUE_TEMPLATE/new_service.md) | Request deployment service baru |
-| [🚨 Incident Report](../../.github/ISSUE_TEMPLATE/incident_report.md) | Laporkan production incident |
+| Template | Usage |
+|----------|-------|
+| [🐛 Bug Report](../../.github/ISSUE_TEMPLATE/bug_report.md) | Report bugs or infrastructure issues |
+| [✨ Feature Request](../../.github/ISSUE_TEMPLATE/feature_request.md) | Request features or enhancements |
+| [🚀 New Service](../../.github/ISSUE_TEMPLATE/new_service.md) | Request new service deployment |
+| [🚨 Incident Report](../../.github/ISSUE_TEMPLATE/incident_report.md) | Report production incidents |
 
-Anda juga bisa membuat issue secara manual dengan format:
+You can also create an issue manually with this format:
 
 ```markdown
-### Deskripsi
-Jelaskan apa yang ingin diubah/ditambah
+### Description
+Explain what you want to change/add
 
 ### Motivation
-Mengapa perubahan ini diperlukan?
+Why is this change needed?
 
 ### Proposed Solution
-Bagaimana Anda berencana menyelesaikannya?
+How do you plan to implement it?
 
 ### Alternatives Considered
-Alternatif lain yang dipertimbangkan
+Other alternatives you've considered
 
 ### Checklist
-- [ ] Saya sudah baca RULES.md
-- [ ] Saya sudah baca CONTRIBUTING.md
+- [ ] I have read RULES.md
+- [ ] I have read CONTRIBUTING.md
 ```
 
 ### 2. Create Feature Branch
@@ -190,7 +190,7 @@ git commit -m "feat(postgres): increase memory limit to 2Gi"
 # Push branch
 git push origin <branch-name>
 
-# Create PR via GitHub UI atau GitHub CLI
+# Create PR via GitHub UI or GitHub CLI
 gh pr create --title "feat(postgres): increase memory limit to 2Gi" \
   --body "## Description
   Increase PostgreSQL memory limit to handle larger workloads.
@@ -209,31 +209,31 @@ gh pr create --title "feat(postgres): increase memory limit to 2Gi" \
 
 ### PR Template
 
-Repository ini menggunakan [Pull Request Template](.github/PULL_REQUEST_TEMPLATE.md) otomatis.
+This repository uses an automatic [Pull Request Template](.github/PULL_REQUEST_TEMPLATE.md).
 
-Saat membuat PR, template akan diisi secara otomatis dengan fields berikut:
+When creating a PR, the template will be automatically filled with the following fields:
 
 ```markdown
 ## Description
-Jelaskan perubahan yang dilakukan secara singkat.
+Describe the changes briefly.
 
 ## Type of Change
-- [ ] 🐛 Bug fix (non-breaking change yang memperbaiki issue)
-- [ ] ✨ New feature (non-breaking change yang menambah fungsionalitas)
-- [ ] 💥 Breaking change (fix atau feature yang akan mengubah fungsionalitas existing)
+- [ ] 🐛 Bug fix (non-breaking change that fixes an issue)
+- [ ] ✨ New feature (non-breaking change that adds functionality)
+- [ ] 💥 Breaking change (fix or feature that changes existing functionality)
 - [ ] 📚 Documentation update
-- [ ] 🔧 Chore (maintenance, dependencies, dll)
+- [ ] 🔧 Chore (maintenance, dependencies, etc.)
 
 ## Changes Made
-- Perubahan 1
-- Perubahan 2
-- Perubahan 3
+- Change 1
+- Change 2
+- Change 3
 
 ## Testing Performed
 - [ ] Kustomize build passes (`kustomize build <path>`)
 - [ ] YAML lint passes (`yamllint .`)
-- [ ] Tested on local cluster (jika applicable)
-- [ ] Tested on staging cluster (jika applicable)
+- [ ] Tested on local cluster (if applicable)
+- [ ] Tested on staging cluster (if applicable)
 
 ## Staging Verification (for production changes)
 - [ ] Deployed to staging
@@ -242,45 +242,45 @@ Jelaskan perubahan yang dilakukan secara singkat.
 - [ ] Screenshots/logs attached if UI changes
 
 ## Rollback Plan
-Jelaskan bagaimana rollback jika terjadi masalah.
+Describe how to rollback if issues occur.
 
 ## Related Issues
 Fixes #123
 Related to #456
 
 ## Checklist
-- [ ] Saya sudah baca RULES.md
-- [ ] Saya sudah baca CONTRIBUTING.md
-- [ ] Code mengikuti naming conventions
-- [ ] Documentation diupdate jika perlu
-- [ ] Tidak ada secrets yang tercommit
+- [ ] I have read RULES.md
+- [ ] I have read CONTRIBUTING.md
+- [ ] Code follows naming conventions
+- [ ] Documentation updated if needed
+- [ ] No secrets committed
 ```
 
 ### PR Requirements
 
-| Requirement | Deskripsi |
-|-------------|-----------|
-| **CI Passing** | Semua checks harus hijau |
-| **Review Approval** | Minimal 1 approval dari maintainer |
-| **No Conflicts** | Branch harus up-to-date dengan main |
-| **Description Complete** | PR description harus jelas |
-| **Labels Applied** | Gunakan labels yang sesuai |
+| Requirement | Description |
+|-------------|-------------|
+| **CI Passing** | All checks must be green |
+| **Review Approval** | Minimum 1 approval from maintainer |
+| **No Conflicts** | Branch must be up-to-date with main |
+| **Description Complete** | PR description must be clear |
+| **Labels Applied** | Use appropriate labels |
 
 ### Labels
 
-| Label | Deskripsi |
-|-------|-----------|
-| `type: feature` | Fitur baru |
+| Label | Description |
+|-------|-------------|
+| `type: feature` | New feature |
 | `type: bug` | Bug fix |
-| `type: docs` | Dokumentasi |
+| `type: docs` | Documentation |
 | `type: chore` | Maintenance |
-| `priority: critical` | Sangat urgent |
+| `priority: critical` | Very urgent |
 | `priority: high` | Urgent |
 | `priority: medium` | Normal |
 | `priority: low` | Not urgent |
-| `status: needs-review` | Menunggu review |
-| `status: approved` | Diapprove, siap merge |
-| `status: changes-requested` | Perlu revisi |
+| `status: needs-review` | Waiting for review |
+| `status: approved` | Approved, ready to merge |
+| `status: changes-requested` | Needs revision |
 | `env: staging` | Affects staging |
 | `env: production` | Affects production |
 
@@ -288,40 +288,40 @@ Related to #456
 
 ## Code Review Process
 
-### Review Checklist (untuk Reviewer)
+### Review Checklist (for Reviewers)
 
 #### Security
-- [ ] Tidak ada hardcoded secrets
-- [ ] Secrets menggunakan secretKeyRef
-- [ ] RBAC permissions minimal yang diperlukan
-- [ ] Network policies defined jika perlu
+- [ ] No hardcoded secrets
+- [ ] Secrets use secretKeyRef
+- [ ] Minimal RBAC permissions required
+- [ ] Network policies defined if needed
 
 #### Best Practices
-- [ ] Naming conventions diikuti
-- [ ] Labels yang proper
+- [ ] Naming conventions followed
+- [ ] Proper labels
 - [ ] Resource limits defined
 - [ ] Health checks configured
 - [ ] Documentation updated
 
 #### Kustomize
-- [ ] Base tidak ada environment-specific values
-- [ ] Overlays minimal (hanya override yang diperlukan)
-- [ ] kustomization.yaml valid
+- [ ] Base has no environment-specific values
+- [ ] Overlays are minimal (only necessary overrides)
+- [ ] kustomization.yaml is valid
 
 #### Operations
-- [ ] Tidak akan menyebabkan downtime
-- [ ] Rollback plan jelas
-- [ ] Monitoring/alerting updated jika perlu
+- [ ] Will not cause downtime
+- [ ] Rollback plan is clear
+- [ ] Monitoring/alerting updated if needed
 - [ ] Backward compatible
 
 ### Review SLA
 
 | PR Type | SLA | Reviewers |
 |---------|-----|-----------|
-| Hotfix | 2 jam | Any available maintainer |
-| Bug fix | 24 jam | 1 maintainer |
-| Feature | 48 jam | 1-2 maintainers |
-| Large refactor | 1 minggu | 2+ maintainers |
+| Hotfix | 2 hours | Any available maintainer |
+| Bug fix | 24 hours | 1 maintainer |
+| Feature | 48 hours | 1-2 maintainers |
+| Large refactor | 1 week | 2+ maintainers |
 
 ### Providing Feedback
 
@@ -390,15 +390,15 @@ trivy config .
 
 ### Staging Verification
 
-Untuk perubahan yang akan masuk production:
+For changes going to production:
 
-1. Deploy ke staging via ArgoCD
-2. Monitor selama minimal 24 jam
+1. Deploy to staging via ArgoCD
+2. Monitor for minimum 24 hours
 3. Verify:
    - [ ] Pods running without restarts
    - [ ] No OOM events
-   - [ ] No errors di logs
-   - [ ] Metrics normal di Grafana
+   - [ ] No errors in logs
+   - [ ] Metrics normal in Grafana
    - [ ] No alerts triggered
 
 ---
@@ -409,7 +409,7 @@ Untuk perubahan yang akan masuk production:
 
 - ✅ Adding new service
 - ✅ Changing architecture
-- ✅ New scripts atau automation
+- ✅ New scripts or automation
 - ✅ Breaking changes
 - ✅ New environment variables
 - ✅ New secrets requirements
@@ -464,7 +464,7 @@ output example
 
 ### Diagrams
 
-Gunakan ASCII art atau Mermaid untuk diagrams:
+Use ASCII art or Mermaid for diagrams:
 
 ```markdown
 # ASCII Art
@@ -498,11 +498,11 @@ graph LR
 
 ### Types
 
-| Type | Deskripsi | Example |
-|------|-----------|---------|
-| `feat` | Fitur baru | `feat(finance-service): add staging deployment` |
+| Type | Description | Example |
+|------|-------------|---------|
+| `feat` | New feature | `feat(finance-service): add staging deployment` |
 | `fix` | Bug fix | `fix(backup): correct minio endpoint` |
-| `docs` | Dokumentasi | `docs(readme): update architecture diagram` |
+| `docs` | Documentation | `docs(readme): update architecture diagram` |
 | `style` | Formatting, missing semicolons, etc | `style: fix yaml indentation` |
 | `refactor` | Code refactoring | `refactor(base): reorganize database configs` |
 | `perf` | Performance improvement | `perf(postgres): optimize connection pool` |
@@ -512,8 +512,8 @@ graph LR
 
 ### Scopes
 
-| Scope | Deskripsi |
-|-------|-----------|
+| Scope | Description |
+|-------|-------------|
 | `postgres` | PostgreSQL configs |
 | `redis` | Redis configs |
 | `minio` | MinIO configs |
@@ -566,7 +566,7 @@ Includes Grafana 11.x and Prometheus 2.54
 
 ### Versioning
 
-Repository ini menggunakan **Calendar Versioning (CalVer)**:
+This repository uses **Calendar Versioning (CalVer)**:
 
 - Format: `YYYY.MM.DD`
 - Example: `2024.01.15`
@@ -631,8 +631,8 @@ Repository ini menggunakan **Calendar Versioning (CalVer)**:
 
 | Channel | Purpose | Response Time |
 |---------|---------|---------------|
-| GitHub Issues | Bug reports, feature requests | 24-48 jam |
-| GitHub Discussions | Questions, ideas | 48-72 jam |
+| GitHub Issues | Bug reports, feature requests | 24-48 hours |
+| GitHub Discussions | Questions, ideas | 48-72 hours |
 | Slack #devops-goapps | Quick questions | Real-time |
 
 ### Before Asking
@@ -685,7 +685,7 @@ Relevant logs here
 
 ### Reporting Issues
 
-Jika menemukan masalah dengan behavior contributor lain, hubungi maintainer secara private.
+If you encounter problems with another contributor's behavior, contact maintainers privately.
 
 ---
 
@@ -698,4 +698,4 @@ Jika menemukan masalah dengan behavior contributor lain, hubungi maintainer seca
 
 ---
 
-Terima kasih telah berkontribusi ke `goapps-infra`! 🚀
+Thank you for contributing to `goapps-infra`! 🚀
