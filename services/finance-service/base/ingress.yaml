@@ -1,0 +1,31 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: finance-service
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - placeholder.example.com
+      secretName: goapps-tls
+  rules:
+    - host: placeholder.example.com
+      http:
+        paths:
+          - path: /api/v1/finance
+            pathType: Prefix
+            backend:
+              service:
+                name: finance-service
+                port:
+                  number: 8080
+          - path: /swagger
+            pathType: Prefix
+            backend:
+              service:
+                name: finance-service
+                port:
+                  number: 8080
