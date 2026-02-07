@@ -1,0 +1,31 @@
+# ArgoCD Application - IAM Service Production
+# NOTE: No automated sync for production safety - manual approval required
+# Image Updater will update the manifest in git, but sync remains manual
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: iam-service-production
+  namespace: argocd
+  annotations:
+    # ArgoCD Image Updater - updates manifest, sync remains manual
+    argocd-image-updater.argoproj.io/image-list: iam=ghcr.io/ilramdhan/iam-service
+    argocd-image-updater.argoproj.io/iam.update-strategy: newest-build
+    argocd-image-updater.argoproj.io/iam.allow-tags: regexp:^(main|latest|[a-f0-9]{7,40})$
+    argocd-image-updater.argoproj.io/write-back-method: git:secret:argocd/git-creds
+    argocd-image-updater.argoproj.io/write-back-target: kustomization
+    argocd-image-updater.argoproj.io/git-branch: main
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: goapps
+  source:
+    repoURL: https://github.com/mutugading/goapps-infra.git
+    targetRevision: main
+    path: services/iam-service/overlays/production
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: goapps-production
+  syncPolicy:
+    # No automated sync for production - manual approval required
+    syncOptions:
+      - CreateNamespace=true

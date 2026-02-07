@@ -1,0 +1,31 @@
+# ArgoCD Application - IAM Service Staging
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: iam-service-staging
+  namespace: argocd
+  annotations:
+    # ArgoCD Image Updater configuration
+    argocd-image-updater.argoproj.io/image-list: iam=ghcr.io/ilramdhan/iam-service
+    argocd-image-updater.argoproj.io/iam.update-strategy: newest-build
+    argocd-image-updater.argoproj.io/iam.allow-tags: regexp:^(main|[a-f0-9]{7,40})$
+    argocd-image-updater.argoproj.io/write-back-method: git:secret:argocd/git-creds
+    argocd-image-updater.argoproj.io/write-back-target: kustomization
+    argocd-image-updater.argoproj.io/git-branch: main
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: goapps
+  source:
+    repoURL: https://github.com/mutugading/goapps-infra.git
+    targetRevision: main
+    path: services/iam-service/overlays/staging
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: goapps-staging
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
