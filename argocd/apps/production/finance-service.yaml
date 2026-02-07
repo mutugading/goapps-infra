@@ -9,7 +9,7 @@ metadata:
   annotations:
     # ArgoCD Image Updater - updates manifest, sync remains manual
     argocd-image-updater.argoproj.io/image-list: finance=ghcr.io/mutugading/finance-service
-    argocd-image-updater.argoproj.io/finance.update-strategy: digest
+    argocd-image-updater.argoproj.io/finance.update-strategy: newest-build
     argocd-image-updater.argoproj.io/finance.allow-tags: regexp:^(latest|[a-f0-9]{7,40})$
     argocd-image-updater.argoproj.io/write-back-method: git:secret:argocd/git-creds
     argocd-image-updater.argoproj.io/write-back-target: kustomization
