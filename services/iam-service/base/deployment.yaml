@@ -56,6 +56,41 @@ spec:
                 secretKeyRef:
                   name: postgres-secret
                   key: POSTGRES_PASSWORD
+            # JWT (shared secrets for SSO token signing/validation)
+            - name: JWT_ACCESS_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: goapps-auth-secret
+                  key: JWT_ACCESS_SECRET
+            - name: JWT_REFRESH_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: goapps-auth-secret
+                  key: JWT_REFRESH_SECRET
+            # SMTP (email for OTP, 2FA notifications)
+            - name: SMTP_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: smtp-secret
+                  key: SMTP_HOST
+            - name: SMTP_PORT
+              valueFrom:
+                secretKeyRef:
+                  name: smtp-secret
+                  key: SMTP_PORT
+            - name: SMTP_USER
+              valueFrom:
+                secretKeyRef:
+                  name: smtp-secret
+                  key: SMTP_USER
+            - name: SMTP_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: smtp-secret
+                  key: SMTP_PASSWORD
+            # CORS (comma-separated origins for SSO multi-app)
+            - name: CORS_ALLOWED_ORIGINS
+              value: "https://app.goapps.local"
             # Redis config
             - name: REDIS_HOST
               value: "redis.database.svc.cluster.local"

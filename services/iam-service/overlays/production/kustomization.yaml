@@ -10,6 +10,7 @@ patches:
   - path: patches/replicas.yaml
   - path: patches/resources.yaml
   - path: patches/ingress-host.yaml
+  - path: patches/env-cors.yaml
 
 images:
   - name: ghcr.io/ilramdhan/iam-service
