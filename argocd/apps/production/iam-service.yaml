@@ -8,7 +8,7 @@ metadata:
   namespace: argocd
   annotations:
     # ArgoCD Image Updater - updates manifest, sync remains manual
-    argocd-image-updater.argoproj.io/image-list: iam=ghcr.io/ilramdhan/iam-service
+    argocd-image-updater.argoproj.io/image-list: iam=ghcr.io/mutugading/iam-service
     argocd-image-updater.argoproj.io/iam.update-strategy: newest-build
     argocd-image-updater.argoproj.io/iam.allow-tags: regexp:^(main|latest|[a-f0-9]{7,40})$
     argocd-image-updater.argoproj.io/write-back-method: git:secret:argocd/git-creds

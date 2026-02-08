@@ -13,5 +13,5 @@ patches:
   - path: patches/env-cors.yaml
 
 images:
-  - name: ghcr.io/ilramdhan/iam-service
+  - name: ghcr.io/mutugading/iam-service
     newTag: latest  # Use latest (main branch) for production
