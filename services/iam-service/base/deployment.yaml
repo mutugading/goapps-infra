@@ -23,7 +23,7 @@ spec:
         - name: ghcr-secret
       containers:
         - name: iam-service
-          image: ghcr.io/ilramdhan/iam-service:latest
+          image: ghcr.io/mutugading/iam-service:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 50052
