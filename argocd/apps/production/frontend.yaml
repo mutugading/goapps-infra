@@ -10,7 +10,7 @@ metadata:
     # ArgoCD Image Updater - updates manifest, sync remains manual
     argocd-image-updater.argoproj.io/image-list: frontend=ghcr.io/mutugading/goapps-frontend
     argocd-image-updater.argoproj.io/frontend.update-strategy: newest-build
-    argocd-image-updater.argoproj.io/frontend.allow-tags: regexp:^[a-f0-9]{7,40}$
+    argocd-image-updater.argoproj.io/frontend.allow-tags: regexp:^(sha-)?[a-f0-9]{7,40}$
     argocd-image-updater.argoproj.io/write-back-method: git:secret:argocd/git-creds
     argocd-image-updater.argoproj.io/write-back-target: kustomization
     argocd-image-updater.argoproj.io/git-branch: main
