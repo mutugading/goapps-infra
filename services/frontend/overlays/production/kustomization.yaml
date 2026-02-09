@@ -9,4 +9,4 @@ patches:
 - path: patches/ingress-host.yaml
 images:
 - name: ghcr.io/mutugading/goapps-frontend
-  newTag: sha-7e3bcd5
+  newTag: dc5ec28
