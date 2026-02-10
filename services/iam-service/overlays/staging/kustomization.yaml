@@ -11,6 +11,7 @@ patches:
   - path: patches/resources.yaml
   - path: patches/ingress-host.yaml
   - path: patches/env-cors.yaml
+  - path: patches/env-storage.yaml
 
 images:
   - name: ghcr.io/mutugading/iam-service

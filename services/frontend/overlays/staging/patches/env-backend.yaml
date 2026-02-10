@@ -1,0 +1,14 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+spec:
+  template:
+    spec:
+      containers:
+        - name: frontend
+          env:
+            - name: IAM_SERVICE_URL
+              value: "http://iam-service:8081"
+            - name: FINANCE_SERVICE_URL
+              value: "http://finance-service:8080"

@@ -1,0 +1,14 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: iam-service
+spec:
+  template:
+    spec:
+      containers:
+        - name: iam-service
+          env:
+            - name: STORAGE_BUCKET
+              value: "goapps-production"
+            - name: STORAGE_PUBLIC_URL
+              value: "https://goapps.mutugading.com:30091"
