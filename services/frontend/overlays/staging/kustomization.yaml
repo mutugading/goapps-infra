@@ -7,6 +7,7 @@ patches:
 - path: patches/replicas.yaml
 - path: patches/resources.yaml
 - path: patches/ingress-host.yaml
+- path: patches/env-backend.yaml
 images:
 - name: ghcr.io/mutugading/goapps-frontend
   newTag: sha-7e3bcd5

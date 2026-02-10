@@ -9,4 +9,4 @@ spec:
         - name: iam-service
           env:
             - name: CORS_ALLOWED_ORIGINS
-              value: "https://goapps.mutugading.com"
+              value: "https://goapps.mutugading.com,https://goapps.mutugading.com:24169"

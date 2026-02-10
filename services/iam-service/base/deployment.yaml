@@ -101,6 +101,29 @@ spec:
               value: "true"
             - name: JAEGER_ENDPOINT
               value: "jaeger-collector.monitoring.svc.cluster.local:4317"
+            # Storage (MinIO) - shared bucket, scoped by base_path per service
+            - name: STORAGE_ENDPOINT
+              value: "minio.minio.svc.cluster.local:9000"
+            - name: STORAGE_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: minio-secret
+                  key: MINIO_ROOT_USER
+            - name: STORAGE_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: minio-secret
+                  key: MINIO_ROOT_PASSWORD
+            - name: STORAGE_BUCKET
+              value: "goapps-staging"    # overridden per environment via kustomize
+            - name: STORAGE_BASE_PATH
+              value: "iam"
+            - name: STORAGE_USE_SSL
+              value: "true"
+            - name: STORAGE_INSECURE_SKIP_VERIFY
+              value: "true"              # self-signed certs in cluster
+            - name: STORAGE_PUBLIC_URL
+              value: ""                  # overridden per environment via kustomize
           resources:
             requests:
               memory: "128Mi"
