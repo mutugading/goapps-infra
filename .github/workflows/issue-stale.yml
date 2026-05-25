@@ -28,5 +28,6 @@ jobs:
             priority:p0
             priority:p1
             status:blocked
+            # New issues stay in triage until a human moves them into backlog or ready.
             status:triage
           operations-per-run: 100

@@ -50,59 +50,57 @@ jobs:
             const projectNumber = process.env.GOAPPS_PROJECT_NUMBER;
             if (!projectNumber) {
               core.info('GOAPPS_PROJECT_NUMBER is not configured; skipping project assignment.');
-              return;
-            }
-
-            const projectOwner = process.env.GOAPPS_PROJECT_OWNER || owner;
-            const projectData = await github.graphql(
-              `
-              query($login: String!, $number: Int!) {
-                repositoryOwner(login: $login) {
-                  __typename
-                  ... on Organization {
-                    projectV2(number: $number) {
-                      id
-                    }
-                  }
-                  ... on User {
-                    projectV2(number: $number) {
-                      id
-                    }
-                  }
-                }
-              }
-              `,
-              {
-                login: projectOwner,
-                number: Number(projectNumber),
-              },
-            );
-
-            const projectId = projectData.repositoryOwner?.projectV2?.id;
-
-            if (!projectId) {
-              core.info(`Project ${projectOwner}/${projectNumber} was not found; skipping project assignment.`);
-              return;
-            }
-
-            try {
-              await github.graphql(
+            } else {
+              const projectOwner = process.env.GOAPPS_PROJECT_OWNER || owner;
+              const projectData = await github.graphql(
                 `
-                mutation($projectId: ID!, $contentId: ID!) {
-                  addProjectV2ItemById(input: { projectId: $projectId, contentId: $contentId }) {
-                    item {
-                      id
+                query($login: String!, $number: Int!) {
+                  repositoryOwner(login: $login) {
+                    __typename
+                    ... on Organization {
+                      projectV2(number: $number) {
+                        id
+                      }
+                    }
+                    ... on User {
+                      projectV2(number: $number) {
+                        id
+                      }
                     }
                   }
                 }
                 `,
                 {
-                  projectId,
-                  contentId: issue.node_id,
+                  login: projectOwner,
+                  number: Number(projectNumber),
                 },
               );
-            } catch (error) {
-              core.info(`Skipping project assignment: ${error.message}`);
+
+              const projectId = projectData.repositoryOwner?.projectV2?.id;
+
+              if (!projectId) {
+                core.info(`Project ${projectOwner}/${projectNumber} was not found; skipping project assignment.`);
+              } else {
+                try {
+                  await github.graphql(
+                    `
+                    mutation($projectId: ID!, $contentId: ID!) {
+                      addProjectV2ItemById(input: { projectId: $projectId, contentId: $contentId }) {
+                        item {
+                          id
+                        }
+                      }
+                    }
+                    `,
+                    {
+                      projectId,
+                      contentId: issue.node_id,
+                    },
+                  );
+                } catch (error) {
+                  core.info(`Skipping project assignment: ${error.message}`);
+                }
+              }
             }
 
             const searchTerms = issue.title
