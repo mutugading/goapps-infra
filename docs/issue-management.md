@@ -60,7 +60,7 @@ Use a single status field with these values:
 
 - Adds new issues to the repo project when project variables are configured
 - Applies `status:triage` to issues that do not already have a status label
-- Comments with likely duplicate issue matches
+- Comments with likely duplicate issue matches using up to 5 title terms, requiring at least 2 searchable terms, and showing up to 3 candidates
 
 ### Pull request status
 
