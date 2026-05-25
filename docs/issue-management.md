@@ -72,6 +72,7 @@ Use a single status field with these values:
 - Marks inactive issues with `stale`
 - Leaves high-priority and blocked issues untouched
 - Uses a 21-day inactivity threshold and a 14-day close window after the stale warning
+- Keeps `status:triage` issues exempt so the intake queue is not auto-closed before review
 
 ## Setup
 

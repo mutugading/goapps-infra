@@ -28,5 +28,6 @@ jobs:
             priority:p0
             priority:p1
             status:blocked
+            # Triage items stay exempt so the intake queue is not auto-closed before review.
             status:triage
           operations-per-run: 100

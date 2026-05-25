@@ -28,6 +28,9 @@ jobs:
             const repo = context.repo.repo;
             const issue = context.payload.issue;
             const labels = issue.labels.map((label) => label.name);
+            const duplicateSearchTermLimit = 5;
+            const duplicateMinimumTerms = 2;
+            const duplicateResultLimit = 3;
 
             const statusLabels = new Set([
               'status:blocked',
@@ -107,13 +110,13 @@ jobs:
               .split(/\s+/)
               .map((word) => word.trim())
               .filter((word) => word.length > 3)
-              .slice(0, 5);
+              .slice(0, duplicateSearchTermLimit);
 
             const safeTerms = searchTerms
               .map((term) => term.replace(/[^A-Za-z0-9-]/g, ''))
               .filter((term) => term.length > 2);
 
-            if (safeTerms.length < 2) {
+            if (safeTerms.length < duplicateMinimumTerms) {
               return;
             }
 
@@ -133,7 +136,7 @@ jobs:
 
             const duplicates = response.data.items
               .filter((item) => item.number !== issue.number)
-              .slice(0, 3);
+              .slice(0, duplicateResultLimit);
 
             if (!duplicates.length) {
               return;
