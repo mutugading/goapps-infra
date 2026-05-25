@@ -1,0 +1,32 @@
+name: Issue Stale Management
+
+on:
+  schedule:
+    - cron: '0 3 * * 1'
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+jobs:
+  stale:
+    name: Mark stale issues
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Apply stale policy
+        uses: actions/stale@v9
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          days-before-stale: 21
+          days-before-close: 14
+          stale-issue-message: >
+            This issue has been inactive for a while and was marked stale.
+            If it is still relevant, please comment with an update to keep it active.
+          stale-issue-label: stale
+          exempt-issue-labels: |
+            priority:p0
+            priority:p1
+            status:blocked
+            status:triage
+          operations-per-run: 100
