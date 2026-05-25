@@ -54,14 +54,17 @@ jobs:
             const projectData = await github.graphql(
               `
               query($login: String!, $number: Int!) {
-                organization(login: $login) {
-                  projectV2(number: $number) {
-                    id
+                repositoryOwner(login: $login) {
+                  __typename
+                  ... on Organization {
+                    projectV2(number: $number) {
+                      id
+                    }
                   }
-                }
-                user(login: $login) {
-                  projectV2(number: $number) {
-                    id
+                  ... on User {
+                    projectV2(number: $number) {
+                      id
+                    }
                   }
                 }
               }
@@ -72,8 +75,7 @@ jobs:
               },
             );
 
-            const projectId =
-              projectData.organization?.projectV2?.id || projectData.user?.projectV2?.id;
+            const projectId = projectData.repositoryOwner?.projectV2?.id;
 
             if (!projectId) {
               core.info(`Project ${projectOwner}/${projectNumber} was not found; skipping project assignment.`);
@@ -107,7 +109,11 @@ jobs:
               .filter((word) => word.length > 3)
               .slice(0, 5);
 
-            if (searchTerms.length < 2) {
+            const safeTerms = searchTerms
+              .map((term) => term.replace(/[^A-Za-z0-9-]/g, ''))
+              .filter((term) => term.length > 2);
+
+            if (safeTerms.length < 2) {
               return;
             }
 
@@ -116,7 +122,7 @@ jobs:
               'is:issue',
               'is:open',
               'in:title',
-              ...searchTerms.map((term) => `"${term}"`),
+              ...safeTerms.map((term) => `"${term}"`),
             ].join(' ');
 
             const response = await github.rest.search.issuesAndPullRequests({
