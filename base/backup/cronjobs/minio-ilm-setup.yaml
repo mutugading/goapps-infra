@@ -1,0 +1,31 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: minio-ilm-setup
+  namespace: database
+spec:
+  ttlSecondsAfterFinished: 300
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: mc
+          image: minio/mc:latest
+          command: ["sh", "-c"]
+          args:
+            - |
+              mc alias set minio https://minio.minio:9000 $MINIO_USER $MINIO_PASS --api S3v4 --insecure
+              mc ilm rule add --expire-days 7 minio/postgres-backups --insecure
+              echo "ILM rules postgres-backups:"
+              mc ilm rule ls minio/postgres-backups --insecure
+          env:
+            - name: MINIO_USER
+              valueFrom:
+                secretKeyRef:
+                  name: minio-secret
+                  key: MINIO_ROOT_USER
+            - name: MINIO_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: minio-secret
+                  key: MINIO_ROOT_PASSWORD

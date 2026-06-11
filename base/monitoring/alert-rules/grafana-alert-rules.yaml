@@ -275,7 +275,7 @@ groups:
                     type: prometheus
                     uid: prometheus
                 editorMode: code
-                expr: kube_pod_container_status_waiting_reason{reason="CrashLoopBackOff"} > 0
+                expr: kube_pod_container_status_waiting_reason{reason="CrashLoopBackOff", namespace!~"database"} > 0
                 instant: true
                 intervalMs: 1000
                 legendFormat: __auto

@@ -104,11 +104,11 @@ kubectl create secret generic oracle-credentials -n go-apps \
   --from-literal=ORACLE_HOST='<ORACLE_IP>' \
   --from-literal=ORACLE_PORT='1521' \
   --from-literal=ORACLE_SERVICE='ORCLPDB1' \
-  --from-literal=ORACLE_MGTHRIS_USER='mgthris' \
+  --from-literal=ORACLE_MGTHRIS_USER='<user>' \
   --from-literal=ORACLE_MGTHRIS_PASSWORD='<PASSWORD>' \
-  --from-literal=ORACLE_MGTAPPS_USER='mgtapps' \
+  --from-literal=ORACLE_MGTAPPS_USER='<user>' \
   --from-literal=ORACLE_MGTAPPS_PASSWORD='<PASSWORD>' \
-  --from-literal=ORACLE_MGTDAT_USER='mgtdat' \
+  --from-literal=ORACLE_MGTDAT_USER='<user>' \
   --from-literal=ORACLE_MGTDAT_PASSWORD='<PASSWORD>'
 ```
 

@@ -198,11 +198,11 @@ kubectl create secret generic oracle-credentials -n goapps-staging \
   --from-literal=ORACLE_HOST='<ORACLE_IP>' \
   --from-literal=ORACLE_PORT='1521' \
   --from-literal=ORACLE_SERVICE='ORCLPDB1' \
-  --from-literal=ORACLE_MGTHRIS_USER='mgthris' \
+  --from-literal=ORACLE_MGTHRIS_USER='<user>' \
   --from-literal=ORACLE_MGTHRIS_PASSWORD='<PASSWORD>' \
   --from-literal=ORACLE_MGTAPPS_USER='mgtapps' \
   --from-literal=ORACLE_MGTAPPS_PASSWORD='<PASSWORD>' \
-  --from-literal=ORACLE_MGTDAT_USER='mgtdat' \
+  --from-literal=ORACLE_MGTDAT_USER='<user>' \
   --from-literal=ORACLE_MGTDAT_PASSWORD='<PASSWORD>'
 ```
 
@@ -213,11 +213,11 @@ kubectl create secret generic oracle-credentials -n goapps-production \
   --from-literal=ORACLE_HOST='<ORACLE_IP>' \
   --from-literal=ORACLE_PORT='1521' \
   --from-literal=ORACLE_SERVICE='ORCLPDB1' \
-  --from-literal=ORACLE_MGTHRIS_USER='mgthris' \
+  --from-literal=ORACLE_MGTHRIS_USER='<user>' \
   --from-literal=ORACLE_MGTHRIS_PASSWORD='<PASSWORD>' \
-  --from-literal=ORACLE_MGTAPPS_USER='mgtapps' \
+  --from-literal=ORACLE_MGTAPPS_USER='<user>' \
   --from-literal=ORACLE_MGTAPPS_PASSWORD='<PASSWORD>' \
-  --from-literal=ORACLE_MGTDAT_USER='mgtdat' \
+  --from-literal=ORACLE_MGTDAT_USER='<user>' \
   --from-literal=ORACLE_MGTDAT_PASSWORD='<PASSWORD>'
 ```
 
@@ -228,13 +228,13 @@ kubectl create secret generic oracle-credentials -n goapps-staging \
   --from-literal=ORACLE_HOST='<ORACLE_IP>' \
   --from-literal=ORACLE_PORT='1521' \
   --from-literal=ORACLE_SERVICE='ORCLPDB1' \
-  --from-literal=ORACLE_MGTHRIS_USER='mgthris' \
+  --from-literal=ORACLE_MGTHRIS_USER='<user>' \
   --from-literal=ORACLE_MGTHRIS_PASSWORD='<PASSWORD>' \
-  --from-literal=ORACLE_MGTAPPS_USER='mgtapps' \
+  --from-literal=ORACLE_MGTAPPS_USER='<user>' \
   --from-literal=ORACLE_MGTAPPS_PASSWORD='<PASSWORD>' \
-  --from-literal=ORACLE_MGTDAT_USER='mgtdat' \
+  --from-literal=ORACLE_MGTDAT_USER='<user>' \
   --from-literal=ORACLE_MGTDAT_PASSWORD='<PASSWORD>' \
-  --from-literal=ORACLE_MGTFIN_USER='mgtfin' \
+  --from-literal=ORACLE_MGTFIN_USER='<user>' \
   --from-literal=ORACLE_MGTFIN_PASSWORD='<PASSWORD>'
 # Note: Tambahkan semua schema yang diperlukan
 ```

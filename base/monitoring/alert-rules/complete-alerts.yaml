@@ -150,7 +150,7 @@ data:
                   to: 0
                 datasourceUid: prometheus
                 model:
-                  expr: kube_pod_container_status_waiting_reason{reason="CrashLoopBackOff"} > 0
+                  expr: kube_pod_container_status_waiting_reason{reason="CrashLoopBackOff", namespace!~"database"} > 0
                   refId: A
               - refId: C
                 datasourceUid: __expr__
@@ -585,7 +585,7 @@ data:
             data:
               - refId: A
                 relativeTimeRange:
-                  from: 86400
+                  from: 3600
                   to: 0
                 datasourceUid: prometheus
                 model:
@@ -608,7 +608,7 @@ data:
                   type: classic_conditions
             noDataState: OK
             execErrState: Error
-            for: 0s
+            for: 5m
             annotations:
               summary: "🔴 PostgreSQL backup job FAILED"
               description: "A scheduled backup job has failed"
