@@ -18,9 +18,6 @@ spec:
               mc ilm rule add --expire-days 7 minio/postgres-backups --insecure
               echo "ILM rules postgres-backups:"
               mc ilm rule ls minio/postgres-backups --insecure
-              mc ilm rule add --expire-days 7 minio/postgres-backups
-              echo "ILM rules postgres-backups:"
-              mc ilm rule ls minio/postgres-backups
           env:
             - name: MINIO_USER
               valueFrom:
