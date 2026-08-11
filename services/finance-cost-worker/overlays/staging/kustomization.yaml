@@ -9,4 +9,4 @@ patches:
 - path: patches/env-finance.yaml
 images:
 - name: ghcr.io/mutugading/finance-cost-worker
-  newTag: 3d2d8c8
+  newTag: b11085b
