@@ -2,7 +2,7 @@
 name: 🚀 New Service Request
 about: Request deployment configuration for a new service
 title: '[SERVICE] Add <service-name>'
-labels: 'type: feature, component: services'
+labels: 'type:feature, area:services, status:triage'
 assignees: ''
 ---
 

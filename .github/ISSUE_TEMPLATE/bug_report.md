@@ -2,7 +2,7 @@
 name: 🐛 Bug Report
 about: Report a bug or issue with infrastructure
 title: '[BUG] '
-labels: 'type: bug, status: needs-triage'
+labels: 'type:bug, status:triage'
 assignees: ''
 ---
 
