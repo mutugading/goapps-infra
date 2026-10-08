@@ -270,19 +270,22 @@ Related to #456
 
 | Label | Description |
 |-------|-------------|
-| `type: feature` | New feature |
-| `type: bug` | Bug fix |
-| `type: docs` | Documentation |
-| `type: chore` | Maintenance |
-| `priority: critical` | Very urgent |
-| `priority: high` | Urgent |
-| `priority: medium` | Normal |
-| `priority: low` | Not urgent |
-| `status: needs-review` | Waiting for review |
-| `status: approved` | Approved, ready to merge |
-| `status: changes-requested` | Needs revision |
-| `env: staging` | Affects staging |
-| `env: production` | Affects production |
+| `type:bug` | Bug report or defect |
+| `type:feature` | New feature or enhancement |
+| `type:chore` | Maintenance work |
+| `type:docs` | Documentation only |
+| `type:incident` | Production incident |
+| `area:infra` | Platform / infrastructure work |
+| `area:services` | Service deployment work |
+| `priority:p0` | Critical |
+| `priority:p1` | High |
+| `priority:p2` | Normal |
+| `priority:p3` | Low |
+| `status:triage` | New issue waiting for review |
+| `status:blocked` | Work blocked by dependency |
+| `status:needs-review` | Pull request waiting for review |
+| `duplicate` | Confirmed duplicate issue |
+| `stale` | Inactive issue needs attention |
 
 ---
 

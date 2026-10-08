@@ -956,6 +956,7 @@ make backup-now
 |----------|------|-------------|
 | Development Rules | [RULES.md](./RULES.md) | Conventions and guidelines |
 | Contributing Guide | [CONTRIBUTING.md](./CONTRIBUTING.md) | How to contribute |
+| Issue Management | [docs/issue-management.md](./docs/issue-management.md) | Project board, labels, and automation |
 | Deployment Guide | [docs/deployment-guide.md](./docs/deployment-guide.md) | Step-by-step deployment |
 | VPS Reset Guide | [docs/vps-reset-guide.md](./docs/vps-reset-guide.md) | Complete VPS reset |
 | License | [LICENSE](./LICENSE) | Proprietary license |
@@ -968,6 +969,10 @@ make backup-now
 | [✨ Feature Request](.github/ISSUE_TEMPLATE/feature_request.md) | Request new features or enhancements |
 | [🚀 New Service](.github/ISSUE_TEMPLATE/new_service.md) | Request deployment for new service |
 | [🚨 Incident Report](.github/ISSUE_TEMPLATE/incident_report.md) | Report production incidents |
+
+### Issue Workflow
+
+New issues are automatically labeled for triage and can be added to the repository project when the project variables are configured. The recommended board, views, and labels are documented in [docs/issue-management.md](./docs/issue-management.md).
 
 ### Pull Request Template
 

@@ -9,3 +9,6 @@ contact_links:
   - name: 🤝 Contributing Guide
     url: https://github.com/mutugading/goapps-infra/blob/main/CONTRIBUTING.md
     about: How to contribute to this repository
+  - name: 🧭 Issue Management
+    url: https://github.com/mutugading/goapps-infra/blob/main/docs/issue-management.md
+    about: Project board, labels, and automation for issues and pull requests
