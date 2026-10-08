@@ -21,6 +21,18 @@ patches:
       - op: replace
         path: /spec/jobTemplate/spec/template/spec/containers/0/env/0/value
         value: "production"
+      # Production keeps PostgreSQL dumps on the dedicated backup disk
+      # (/goapps-backup, sdb) + Backblaze B2 only. Blanking MINIO_ENDPOINT
+      # makes backup.sh skip both the MinIO upload and the MinIO prune: the
+      # postgres-backups bucket lived on the ROOT disk via the MinIO PVC and
+      # its ~24G pushed the node into DiskPressure on 2026-10-08, evicting
+      # ingress-nginx and taking the whole site down. `test` guards the index.
+      - op: test
+        path: /spec/jobTemplate/spec/template/spec/containers/0/env/2/name
+        value: "MINIO_ENDPOINT"
+      - op: replace
+        path: /spec/jobTemplate/spec/template/spec/containers/0/env/2/value
+        value: ""
       - op: replace
         path: /spec/jobTemplate/spec/template/spec/volumes/0/hostPath/path
         value: "/goapps-backup/postgres"
@@ -33,6 +45,18 @@ patches:
       - op: replace
         path: /spec/jobTemplate/spec/template/spec/containers/0/env/0/value
         value: "production"
+      # Production keeps PostgreSQL dumps on the dedicated backup disk
+      # (/goapps-backup, sdb) + Backblaze B2 only. Blanking MINIO_ENDPOINT
+      # makes backup.sh skip both the MinIO upload and the MinIO prune: the
+      # postgres-backups bucket lived on the ROOT disk via the MinIO PVC and
+      # its ~24G pushed the node into DiskPressure on 2026-10-08, evicting
+      # ingress-nginx and taking the whole site down. `test` guards the index.
+      - op: test
+        path: /spec/jobTemplate/spec/template/spec/containers/0/env/2/name
+        value: "MINIO_ENDPOINT"
+      - op: replace
+        path: /spec/jobTemplate/spec/template/spec/containers/0/env/2/value
+        value: ""
       - op: replace
         path: /spec/jobTemplate/spec/template/spec/volumes/0/hostPath/path
         value: "/goapps-backup/postgres"
@@ -45,6 +69,18 @@ patches:
       - op: replace
         path: /spec/jobTemplate/spec/template/spec/containers/0/env/0/value
         value: "production"
+      # Production keeps PostgreSQL dumps on the dedicated backup disk
+      # (/goapps-backup, sdb) + Backblaze B2 only. Blanking MINIO_ENDPOINT
+      # makes backup.sh skip both the MinIO upload and the MinIO prune: the
+      # postgres-backups bucket lived on the ROOT disk via the MinIO PVC and
+      # its ~24G pushed the node into DiskPressure on 2026-10-08, evicting
+      # ingress-nginx and taking the whole site down. `test` guards the index.
+      - op: test
+        path: /spec/jobTemplate/spec/template/spec/containers/0/env/2/name
+        value: "MINIO_ENDPOINT"
+      - op: replace
+        path: /spec/jobTemplate/spec/template/spec/containers/0/env/2/value
+        value: ""
       - op: replace
         path: /spec/jobTemplate/spec/template/spec/volumes/0/hostPath/path
         value: "/goapps-backup/postgres"
@@ -65,4 +101,7 @@ patches:
         value: "/goapps-backup"
       - op: replace
         path: /spec/jobTemplate/spec/template/spec/containers/0/env/5/value
-        value: "postgres-backups export-files goapps-production"
+        # postgres-backups dropped: production no longer uploads dumps to
+        # MinIO (see postgres-backup patches above), and the dumps already
+        # sit in /goapps-backup/postgres on the same disk this mirror writes to.
+        value: "export-files goapps-production"
