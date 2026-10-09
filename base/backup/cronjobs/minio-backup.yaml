@@ -21,7 +21,7 @@ spec:
           restartPolicy: OnFailure
           containers:
             - name: minio-backup
-              image: minio/mc:latest
+              image: quay.io/minio/mc:latest
               imagePullPolicy: IfNotPresent
               command: ["/bin/sh", "-c"]
               args:

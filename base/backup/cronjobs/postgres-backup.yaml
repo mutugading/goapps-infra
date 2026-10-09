@@ -245,7 +245,7 @@ spec:
           restartPolicy: Never
           initContainers:
             - name: copy-mc
-              image: minio/mc:latest
+              image: quay.io/minio/mc:latest
               imagePullPolicy: IfNotPresent
               command: ["cp", "/usr/bin/mc", "/tools/mc"]
               volumeMounts:
@@ -347,7 +347,7 @@ spec:
           restartPolicy: Never
           initContainers:
             - name: copy-mc
-              image: minio/mc:latest
+              image: quay.io/minio/mc:latest
               imagePullPolicy: IfNotPresent
               command: ["cp", "/usr/bin/mc", "/tools/mc"]
               volumeMounts:
@@ -449,7 +449,7 @@ spec:
           restartPolicy: Never
           initContainers:
             - name: copy-mc
-              image: minio/mc:latest
+              image: quay.io/minio/mc:latest
               imagePullPolicy: IfNotPresent
               command: ["cp", "/usr/bin/mc", "/tools/mc"]
               volumeMounts:
