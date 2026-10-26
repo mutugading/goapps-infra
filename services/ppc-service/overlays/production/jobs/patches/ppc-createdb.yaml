@@ -1,0 +1,42 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ppc-createdb
+spec:
+  template:
+    spec:
+      containers:
+        - name: ppc-createdb
+          # ppc_db is pre-created on the VPS and ppc_owner has no CREATEDB:
+          # verify-only (exit 0 if it exists, fail loudly if not).
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              echo "Verifying database ppc_db exists..."
+              if psql -tAc "SELECT 1 FROM pg_database WHERE datname='ppc_db'" | grep -q 1; then
+                echo "ppc_db already exists - nothing to do."
+              else
+                echo "ppc_db is missing; it must be pre-created by the DBA (ppc_owner has no CREATEDB)." >&2
+                exit 1
+              fi
+          env:
+            - name: PGHOST
+              value: "192.168.0.40"
+            - name: PGPORT
+              value: "5432"
+            - name: PGDATABASE
+              value: "ppc_db"
+            - name: PGSSLMODE
+              value: "require"
+            - name: PGUSER
+              valueFrom:
+                secretKeyRef:
+                  name: ppc-db-secret
+                  key: OWNER_USER
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ppc-db-secret
+                  key: OWNER_PASSWORD

@@ -1,0 +1,14 @@
+# One-off Jobs for production (DB v2 cutover). NOT referenced by ../kustomization.yaml and
+# not synced by ArgoCD: render and apply manually, e.g.
+#   kustomize build --load-restrictor LoadRestrictionsNone services/iam-service/overlays/production/jobs | sed "s|IMAGE_TAG|<tag>|" | kubectl apply -f -
+# Jobs connect DIRECT to the VPS 192.168.0.40:5432 (not via PgBouncer: DDL, advisory
+# locks, session options) as the `<svc>_owner` role from Secret `<svc>-db-secret`.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: goapps-production
+resources:
+- ../../../base/migrate-job.yaml
+- ../../../base/seed-job.yaml
+patches:
+- path: patches/iam-migrate.yaml
+- path: patches/iam-seed.yaml
