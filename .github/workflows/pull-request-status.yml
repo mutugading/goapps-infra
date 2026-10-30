@@ -1,0 +1,51 @@
+name: Pull Request Status
+
+on:
+  pull_request:
+    types:
+      - opened
+      - reopened
+      - ready_for_review
+      - synchronize
+      - converted_to_draft
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  label-pr:
+    name: Update PR status
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Sync PR labels
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const pullRequest = context.payload.pull_request;
+            const issueNumber = pullRequest.number;
+            const isDraft = pullRequest.draft;
+
+            const desiredLabel = isDraft ? 'status:in-progress' : 'status:needs-review';
+            const removeLabel = isDraft ? 'status:needs-review' : 'status:in-progress';
+
+            await github.rest.issues.addLabels({
+              owner,
+              repo,
+              issue_number: issueNumber,
+              labels: [desiredLabel],
+            });
+
+            try {
+              await github.rest.issues.removeLabel({
+                owner,
+                repo,
+                issue_number: issueNumber,
+                name: removeLabel,
+              });
+            } catch (error) {
+              core.info(`Skipping label removal: ${error.message}`);
+            }
