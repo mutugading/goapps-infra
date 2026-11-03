@@ -2,7 +2,7 @@
 name: 🚨 Incident Report
 about: Report a production incident
 title: '[INCIDENT] '
-labels: 'type: incident, priority: critical'
+labels: 'type:incident, needs-triage'
 assignees: ''
 ---
 
