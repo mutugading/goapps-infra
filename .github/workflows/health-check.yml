@@ -17,6 +17,9 @@ on:
           - production
           - all
 
+permissions:
+  contents: read
+
 jobs:
   health-staging:
     name: Check Staging
