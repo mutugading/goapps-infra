@@ -714,3 +714,5 @@ If you encounter problems with another contributor's behavior, contact maintaine
 ---
 
 Thank you for contributing to `goapps-infra`! 🚀
+
+> Found a vulnerability? Do not open a public issue; see [SECURITY.md](SECURITY.md) for how to report it privately.
