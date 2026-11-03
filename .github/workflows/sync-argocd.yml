@@ -23,6 +23,9 @@ on:
           - production
           - all
 
+permissions:
+  contents: read
+
 jobs:
   sync-staging:
     name: Sync Staging
