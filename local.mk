@@ -113,8 +113,8 @@ local-scale-zero: local-guard-ctx
 local-scale-one: local-guard-ctx
 	$(LOCAL_KC) -n $(LOCAL_NS) scale deployment --all --replicas=1
 
-# Applies only Jobs whose label component=<migration|seeder> from the rendered jobs overlay
-# (finance seed also matches nothing else; backfill/createdb jobs have other component labels).
+# Applies only the Job labelled component=<migration|seeder>,app=$(SVC) from the rendered jobs
+# overlay (backfill/createdb jobs have other component labels and are never selected).
 define local_job_apply
 	@case "$(SVC)" in finance-service|iam-service|ppc-service) ;; \
 	  *) echo "ERROR: SVC must be finance-service|iam-service|ppc-service"; exit 1;; esac
@@ -122,11 +122,14 @@ define local_job_apply
 	@[ "$(CONFIRM)" = "yes" ] || { echo "Re-run with CONFIRM=yes to proceed."; exit 1; }
 	@# Jobs have a fixed name + :local tag and ttlSecondsAfterFinished, so a plain apply would
 	@# report "unchanged" (no new pod) or fail on the immutable pod template. Delete first.
+	@# Selector is component AND app: all services share $(LOCAL_NS), so component alone
+	@# would match another service's Job (e.g. finance-migrate while SVC=iam-service).
 	kustomize build --load-restrictor LoadRestrictionsNone services/$(SVC)/overlays/local/jobs \
-	  | $(LOCAL_KC) delete -f - -l component=$(1) --ignore-not-found --wait=true
+	  | $(LOCAL_KC) delete -f - -l component=$(1),app=$(SVC) --ignore-not-found --wait=true
 	kustomize build --load-restrictor LoadRestrictionsNone services/$(SVC)/overlays/local/jobs \
-	  | $(LOCAL_KC) apply -f - -l component=$(1)
-	@job=$$($(LOCAL_KC) -n $(LOCAL_NS) get jobs -l component=$(1) -o name | head -1); \
+	  | $(LOCAL_KC) apply -f - -l component=$(1),app=$(SVC)
+	@job=$$($(LOCAL_KC) -n $(LOCAL_NS) get jobs -l component=$(1),app=$(SVC) -o name); \
+	  [ "$$(echo "$$job" | grep -c .)" = 1 ] || { echo "ERROR: expected exactly 1 Job for component=$(1),app=$(SVC), got: $$job"; exit 1; }; \
 	  echo "waiting for $$job (timeout $(LOCAL_JOB_TIMEOUT))"; \
 	  if $(LOCAL_KC) -n $(LOCAL_NS) wait --for=condition=complete $$job --timeout=$(LOCAL_JOB_TIMEOUT); then \
 	    $(LOCAL_KC) -n $(LOCAL_NS) logs $$job --tail=30; \
