@@ -3,6 +3,7 @@
 
 .PHONY: help bootstrap install-monitoring install-argocd apply-staging apply-production reset deploy-iam-staging deploy-iam-production
 
+.DEFAULT_GOAL := help
 -include local.mk
 
 # Colors

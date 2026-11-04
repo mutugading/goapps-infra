@@ -13,6 +13,7 @@ LOCAL_DISK        ?= 40
 BACKEND_DIR       ?= ../goapps-backend
 FRONTEND_DIR      ?= ../goapps-frontend
 LOCAL_DOCKER_HOST ?= unix://$(HOME)/.colima/$(LOCAL_PROFILE)/docker.sock
+LOCAL_JOB_TIMEOUT ?= 300s
 LOCAL_SERVICES    ?= finance-service finance-worker finance-cost-orchestrator finance-cost-worker iam-service ppc-service frontend
 
 # image-name:build-context:dockerfile (mirrors CI: context '.' = repo root, file ./services/<dir>/Dockerfile;
@@ -49,6 +50,8 @@ local-help:
 	@echo "  make local-destroy CONFIRM=yes - delete colima profile $(LOCAL_PROFILE)"
 
 local-guard-ctx:
+	@[ "$(LOCAL_CTX)" = "colima-k8s" ] || \
+	  { echo "REFUSING: LOCAL_CTX must be colima-k8s (got '$(LOCAL_CTX)')"; exit 1; }
 	@kubectl config get-contexts -o name | grep -qx '$(LOCAL_CTX)' || \
 	  { echo "ERROR: kube context '$(LOCAL_CTX)' not found (run: make local-cluster-up)"; exit 1; }
 
@@ -117,8 +120,19 @@ define local_job_apply
 	  *) echo "ERROR: SVC must be finance-service|iam-service|ppc-service"; exit 1;; esac
 	@echo "WARNING: this writes to the SHARED local DB v2 on the host (postgres :5440)."
 	@[ "$(CONFIRM)" = "yes" ] || { echo "Re-run with CONFIRM=yes to proceed."; exit 1; }
+	@# Jobs have a fixed name + :local tag and ttlSecondsAfterFinished, so a plain apply would
+	@# report "unchanged" (no new pod) or fail on the immutable pod template. Delete first.
+	kustomize build --load-restrictor LoadRestrictionsNone services/$(SVC)/overlays/local/jobs \
+	  | $(LOCAL_KC) delete -f - -l component=$(1) --ignore-not-found --wait=true
 	kustomize build --load-restrictor LoadRestrictionsNone services/$(SVC)/overlays/local/jobs \
 	  | $(LOCAL_KC) apply -f - -l component=$(1)
+	@job=$$($(LOCAL_KC) -n $(LOCAL_NS) get jobs -l component=$(1) -o name | head -1); \
+	  echo "waiting for $$job (timeout $(LOCAL_JOB_TIMEOUT))"; \
+	  if $(LOCAL_KC) -n $(LOCAL_NS) wait --for=condition=complete $$job --timeout=$(LOCAL_JOB_TIMEOUT); then \
+	    $(LOCAL_KC) -n $(LOCAL_NS) logs $$job --tail=30; \
+	  else \
+	    echo "ERROR: $$job did not complete"; $(LOCAL_KC) -n $(LOCAL_NS) logs $$job --tail=80; exit 1; \
+	  fi
 endef
 
 local-migrate: local-guard-ctx

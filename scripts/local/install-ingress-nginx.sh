@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # Install ingress-nginx on the LOCAL Colima k3s cluster only (context-guarded).
-# Chart 4.15.1 (controller v1.15.1). NOTE: staging does not pin a version
-# (scripts/install-nginx-ingress.sh) - recommend pinning staging later.
+# Chart 4.15.1 (controller v1.15.1), same pin as scripts/install-nginx-ingress.sh (staging/prod).
 set -euo pipefail
 CTX="${KUBE_CONTEXT:-colima-k8s}"
 CHART_VERSION="${INGRESS_NGINX_CHART_VERSION:-4.15.1}"
