@@ -1,0 +1,17 @@
+# Local: small requests; CPU limit stays >=500m (Next.js startup/SSR floor, see staging note).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+spec:
+  template:
+    spec:
+      containers:
+        - name: frontend
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "1Gi"
+              cpu: "750m"

@@ -1,0 +1,6 @@
+# Local: image is loaded into the cluster, no ghcr pull secret.
+- op: replace
+  path: /spec/template/spec/containers/0/imagePullPolicy
+  value: IfNotPresent
+- op: remove
+  path: /spec/template/spec/imagePullSecrets

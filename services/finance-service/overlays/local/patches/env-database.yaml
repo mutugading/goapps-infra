@@ -1,0 +1,41 @@
+# Local k3s: DB via pgbouncer-vps Service (maps to host pgbouncer v2). Same shape as staging.
+# DB v2 cutover: traffic goes through pgbouncer-vps (in-cluster, no TLS on the
+# pod->pgbouncer hop; pgbouncer->VPS 192.168.0.60 is TLS). Runtime services use the
+# DML-only `finance_app` role from Secret `finance-db-secret` (keys APP_USER/APP_PASSWORD).
+# Never put credentials in this file. See docs/db-v2-cutover.md.
+#
+# The env vars above the DATABASE block are restated verbatim from base/ ONLY to
+# preserve the rendered env-list ordering (strategic merge appends unmatched
+# entries). This patch is listed FIRST in kustomization.yaml for the same reason.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: finance-service
+spec:
+  template:
+    spec:
+      containers:
+        - name: finance-service
+          env:
+            - name: APP_ENV
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: DATABASE_HOST
+              value: "pgbouncer-vps.database.svc.cluster.local"
+            - name: DATABASE_PORT
+              value: "5432"
+            - name: DATABASE_NAME
+              value: "finance_db"
+            - name: DATABASE_SSLMODE
+              value: "disable"
+            - name: DATABASE_USER
+              valueFrom:
+                secretKeyRef:
+                  name: finance-db-secret
+                  key: APP_USER
+            - name: DATABASE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: finance-db-secret
+                  key: APP_PASSWORD

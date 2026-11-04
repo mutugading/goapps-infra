@@ -1,0 +1,24 @@
+# Local: 1 replica (tickers not leader-elected), small resources, no tracing, local image.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ppc-service
+spec:
+  replicas: 1
+  template:
+    spec:
+      containers:
+        - name: ppc-service
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: TRACING_ENABLED
+              value: "false"
+            - name: JAEGER_ENDPOINT
+              value: ""
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"

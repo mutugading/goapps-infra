@@ -1,0 +1,17 @@
+# Local email: smtp-secret points to mailpit (plain SMTP, no TLS). Start mailpit first.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: iam-service
+spec:
+  template:
+    spec:
+      containers:
+        - name: iam-service
+          env:
+            - name: SMTP_USE_TLS
+              value: "false"
+            - name: SMTP_SKIP_VERIFY
+              value: "false"
+            - name: EMAIL_APP_URL
+              value: "http://goapps.localhost"

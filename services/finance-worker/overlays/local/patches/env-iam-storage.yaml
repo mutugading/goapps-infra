@@ -1,0 +1,23 @@
+# Local: IAM gRPC target, MinIO (plain HTTP, host compose), tracing off.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: finance-worker
+spec:
+  template:
+    spec:
+      containers:
+        - name: finance-worker
+          env:
+            - name: TRACING_ENABLED
+              value: "false"
+            - name: JAEGER_ENDPOINT
+              value: ""
+            - name: IAM_GRPC_HOST
+              value: "iam-service.goapps-local.svc.cluster.local"
+            - name: MINIO_BUCKET
+              value: "goapps-staging"
+            - name: MINIO_USE_SSL
+              value: "false"
+            - name: MINIO_PUBLIC_URL
+              value: "http://localhost:9000"

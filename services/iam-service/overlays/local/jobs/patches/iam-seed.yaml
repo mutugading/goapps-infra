@@ -1,0 +1,30 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: iam-seed
+spec:
+  template:
+    spec:
+      imagePullSecrets: null  # no ghcr-secret locally
+      containers:
+        - name: iam-seeder
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: DATABASE_HOST
+              value: "postgres-v2.database.svc.cluster.local"
+            - name: DATABASE_PORT
+              value: "5432"
+            - name: DATABASE_NAME
+              value: "iam_db"
+            - name: DATABASE_SSLMODE
+              value: "disable"
+            - name: DATABASE_USER
+              valueFrom:
+                secretKeyRef:
+                  name: iam-db-secret
+                  key: OWNER_USER
+            - name: DATABASE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: iam-db-secret
+                  key: OWNER_PASSWORD

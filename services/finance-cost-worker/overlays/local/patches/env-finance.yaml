@@ -1,0 +1,15 @@
+# Local: finance-service gRPC target + tracing off (no Jaeger locally).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: finance-cost-worker
+spec:
+  template:
+    spec:
+      containers:
+        - name: finance-cost-worker
+          env:
+            - name: FINANCE_GRPC_HOST
+              value: "finance-service.goapps-local.svc.cluster.local"
+            - name: TRACING_ENABLED
+              value: "false"

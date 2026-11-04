@@ -1,0 +1,22 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: goapps-local
+resources:
+- ../../base
+patches:
+- path: patches/env-database.yaml
+- path: patches/resources.yaml
+- path: patches/env-iam-storage.yaml
+- path: patches/env-erp.yaml
+- path: patches/image-pull.yaml
+- path: patches/cronjob.yaml
+# No ghcr-secret locally: drop imagePullSecrets (JSON6902).
+- target:
+    kind: Deployment
+    name: finance-worker
+  patch: |-
+    - op: remove
+      path: /spec/template/spec/imagePullSecrets
+images:
+- name: ghcr.io/mutugading/finance-service
+  newTag: local

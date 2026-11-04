@@ -1,0 +1,11 @@
+# Local images are loaded into the cluster, never pulled from ghcr.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: finance-worker
+spec:
+  template:
+    spec:
+      containers:
+        - name: finance-worker
+          imagePullPolicy: IfNotPresent

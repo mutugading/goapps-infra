@@ -1,0 +1,26 @@
+# Local: ERP flags mirror staging shape. NOTE: oracle-credentials holds dummy
+# values locally, so Oracle/ERP features will not work until real values are filled.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: finance-worker
+spec:
+  template:
+    spec:
+      containers:
+        - name: finance-worker
+          env:
+            - name: ERP_WRITER_MODE
+              value: "fake"
+            - name: ERP_DEMAND_SOURCE
+              value: "base_tables"
+            - name: ERP_PUSH_ENABLED
+              value: "true"
+            - name: ERP_VALUATION_ENABLED
+              value: "true"
+            - name: ERP_ADJ_APPROVE_ENABLED
+              value: "false"
+            - name: ERP_SCHEDULE_ENABLED
+              value: "false"
+            - name: ERP_SCHEDULE_TZ
+              value: "Asia/Jakarta"

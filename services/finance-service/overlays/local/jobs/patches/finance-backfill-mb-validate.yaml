@@ -1,0 +1,30 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: finance-backfill-mb-validate
+spec:
+  template:
+    spec:
+      imagePullSecrets: null  # no ghcr-secret locally
+      containers:
+        - name: backfill-mb-validate
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: DATABASE_HOST
+              value: "postgres-v2.database.svc.cluster.local"
+            - name: DATABASE_PORT
+              value: "5432"
+            - name: DATABASE_NAME
+              value: "finance_db"
+            - name: DATABASE_SSLMODE
+              value: "disable"
+            - name: DATABASE_USER
+              valueFrom:
+                secretKeyRef:
+                  name: finance-db-secret
+                  key: OWNER_USER
+            - name: DATABASE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: finance-db-secret
+                  key: OWNER_PASSWORD

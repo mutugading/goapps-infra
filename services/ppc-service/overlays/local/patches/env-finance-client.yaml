@@ -1,0 +1,19 @@
+# Local: fully-qualified service DNS in goapps-local.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ppc-service
+spec:
+  template:
+    spec:
+      containers:
+        - name: ppc-service
+          env:
+            - name: FINANCE_GRPC_HOST
+              value: "finance-service.goapps-local.svc.cluster.local"
+            - name: FINANCE_GRPC_PORT
+              value: "50051"
+            - name: IAM_GRPC_HOST
+              value: "iam-service.goapps-local.svc.cluster.local"
+            - name: IAM_GRPC_PORT
+              value: "50052"

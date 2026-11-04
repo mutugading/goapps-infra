@@ -1,0 +1,21 @@
+# Local k3s overlay (namespace goapps-local). env-database is listed FIRST to keep env ordering.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: goapps-local
+resources:
+- ../../base
+patches:
+- path: patches/env-database.yaml
+- path: patches/replicas.yaml
+- path: patches/resources.yaml
+- path: patches/ingress-host.yaml
+- path: patches/env-cors.yaml
+- path: patches/env-storage.yaml
+- path: patches/env-oracle.yaml
+- path: patches/env-erp.yaml
+- path: patches/hpa.yaml
+- path: patches/servicemonitor-delete.yaml
+- path: patches/image-pull.yaml
+images:
+- name: ghcr.io/mutugading/finance-service
+  newTag: local

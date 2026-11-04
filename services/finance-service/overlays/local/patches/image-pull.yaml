@@ -1,0 +1,12 @@
+# Local images are loaded into the cluster; no ghcr-secret.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: finance-service
+spec:
+  template:
+    spec:
+      imagePullSecrets: null
+      containers:
+        - name: finance-service
+          imagePullPolicy: IfNotPresent

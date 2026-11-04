@@ -1,0 +1,18 @@
+# OPT-IN local one-off Jobs (migrate/seed). NOT referenced by ../kustomization.yaml.
+# Touches the shared local DB v2 on the host. Render + apply manually:
+#   kustomize build --load-restrictor LoadRestrictionsNone services/iam-service/overlays/local/jobs | kubectl apply -f -
+# Jobs connect DIRECT to pg v2 via postgres-v2.database.svc:5432 (-> host :5440), NOT via
+# PgBouncer (DDL/advisory locks), as `<svc>_owner` from Secret `<svc>-db-secret`.
+# Image tag `local` is set via images: newTag (no IMAGE_TAG sed needed); load image into k3s first.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: goapps-local
+resources:
+- ../../../base/migrate-job.yaml
+- ../../../base/seed-job.yaml
+patches:
+- path: patches/iam-migrate.yaml
+- path: patches/iam-seed.yaml
+images:
+- name: ghcr.io/mutugading/iam-service
+  newTag: local
