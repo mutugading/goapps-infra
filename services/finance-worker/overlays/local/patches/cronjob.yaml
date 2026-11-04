@@ -1,0 +1,14 @@
+# Local: CronJob only runs curl (public image, no pull secret in base);
+# IfNotPresent avoids needless pulls. Trigger URL is the in-namespace finance-service.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: oracle-sync-monthly
+spec:
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+            - name: trigger
+              imagePullPolicy: IfNotPresent

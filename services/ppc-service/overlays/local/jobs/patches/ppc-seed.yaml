@@ -1,0 +1,30 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ppc-seed
+spec:
+  template:
+    spec:
+      imagePullSecrets: null  # no ghcr-secret locally
+      containers:
+        - name: ppc-seeder
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: PPC_DATABASE_HOST
+              value: "postgres-v2.database.svc.cluster.local"
+            - name: PPC_DATABASE_PORT
+              value: "5432"
+            - name: PPC_DATABASE_NAME
+              value: "ppc_db"
+            - name: PPC_DATABASE_SSLMODE
+              value: "disable"
+            - name: PPC_DATABASE_USER
+              valueFrom:
+                secretKeyRef:
+                  name: ppc-db-secret
+                  key: OWNER_USER
+            - name: PPC_DATABASE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ppc-db-secret
+                  key: OWNER_PASSWORD

@@ -1,0 +1,6 @@
+# Local: no Prometheus CRD.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: finance-cost-worker
+$patch: delete

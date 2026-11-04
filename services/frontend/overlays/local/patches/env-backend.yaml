@@ -1,0 +1,29 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+spec:
+  template:
+    spec:
+      containers:
+        - name: frontend
+          env:
+            # gRPC backends via in-cluster FQDN (goapps-local namespace).
+            - name: IAM_GRPC_HOST
+              value: "iam-service.goapps-local.svc.cluster.local"
+            - name: IAM_GRPC_PORT
+              value: "50052"
+            - name: FINANCE_GRPC_HOST
+              value: "finance-service.goapps-local.svc.cluster.local"
+            - name: FINANCE_GRPC_PORT
+              value: "50051"
+            - name: PPC_GRPC_HOST
+              value: "ppc-service.goapps-local.svc.cluster.local"
+            - name: PPC_GRPC_PORT
+              value: "50053"
+            # Same secret/key as staging: x-service-secret for PPC BFF -> finance lookups.
+            - name: FINANCE_INTERNAL_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: goapps-internal-token
+                  key: INTERNAL_SERVICE_TOKEN

@@ -1,0 +1,23 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: goapps-local
+resources:
+- ../../base
+patches:
+- path: patches/env-database.yaml   # first: preserves env ordering (see staging)
+- path: patches/deployment.yaml
+- path: patches/hpa.yaml
+- path: patches/servicemonitor-delete.yaml
+- path: patches/ingress.yaml
+- path: patches/env-cors.yaml
+- path: patches/env-storage.yaml
+- path: patches/env-email.yaml
+- target:
+    kind: Deployment
+    name: iam-service
+  patch: |-
+    - op: remove
+      path: /spec/template/spec/imagePullSecrets
+images:
+- name: ghcr.io/mutugading/iam-service
+  newTag: local

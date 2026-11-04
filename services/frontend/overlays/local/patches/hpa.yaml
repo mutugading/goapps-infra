@@ -1,0 +1,8 @@
+# Local: pin HPA to a single replica.
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: frontend
+spec:
+  minReplicas: 1
+  maxReplicas: 1

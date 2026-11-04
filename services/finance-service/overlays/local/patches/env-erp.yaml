@@ -1,0 +1,23 @@
+# ERP flags for local: writer "fake" (in-memory), no Oracle write. Oracle is dummy locally.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: finance-service
+spec:
+  template:
+    spec:
+      containers:
+        - name: finance-service
+          env:
+            - name: ERP_WRITER_MODE
+              value: "fake"
+            - name: ERP_PUSH_ENABLED
+              value: "true"
+            - name: ERP_VALUATION_ENABLED
+              value: "true"
+            - name: ERP_ADJ_APPROVE_ENABLED
+              value: "false"
+            - name: ERP_SCHEDULE_ENABLED
+              value: "false"
+            - name: ERP_SCHEDULE_TZ
+              value: "Asia/Jakarta"

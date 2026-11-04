@@ -1,0 +1,30 @@
+# Local: DB via pgbouncer-vps Service (-> host pgbouncer v2 :6440), DML-only finance_app role.
+# Base env entries above DATABASE restated only to keep env ordering (same as staging).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: finance-worker
+spec:
+  template:
+    spec:
+      containers:
+        - name: finance-worker
+          env:
+            - name: DATABASE_HOST
+              value: "pgbouncer-vps.database.svc.cluster.local"
+            - name: DATABASE_PORT
+              value: "5432"
+            - name: DATABASE_NAME
+              value: "finance_db"
+            - name: DATABASE_SSLMODE
+              value: "disable"
+            - name: DATABASE_USER
+              valueFrom:
+                secretKeyRef:
+                  name: finance-db-secret
+                  key: APP_USER
+            - name: DATABASE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: finance-db-secret
+                  key: APP_PASSWORD

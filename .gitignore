@@ -24,3 +24,6 @@ Thumbs.db
 # Kubeconfig
 kubeconfig
 *.kubeconfig
+
+# Local K3s secrets (real values, never commit)
+*.local.env

@@ -1,0 +1,36 @@
+# NOTE: oracle-credentials holds DUMMY values locally; Oracle ETL features will not work.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ppc-service
+spec:
+  template:
+    spec:
+      containers:
+        - name: ppc-service
+          env:
+            - name: ORACLE_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: oracle-credentials
+                  key: ORACLE_HOST
+            - name: ORACLE_PORT
+              valueFrom:
+                secretKeyRef:
+                  name: oracle-credentials
+                  key: ORACLE_PORT
+            - name: ORACLE_SERVICE
+              valueFrom:
+                secretKeyRef:
+                  name: oracle-credentials
+                  key: ORACLE_SERVICE
+            - name: ORACLE_USER
+              valueFrom:
+                secretKeyRef:
+                  name: oracle-credentials
+                  key: ORACLE_USER
+            - name: ORACLE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: oracle-credentials
+                  key: ORACLE_PASSWORD

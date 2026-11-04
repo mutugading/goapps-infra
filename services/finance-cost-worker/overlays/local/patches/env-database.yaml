@@ -1,0 +1,40 @@
+# Local: DB via pgbouncer-vps Service (-> host pgbouncer v2). Creds from finance-db-secret.
+# Preceding env vars restated from base only to preserve env ordering.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: finance-cost-worker
+spec:
+  template:
+    spec:
+      containers:
+        - name: finance-cost-worker
+          env:
+            - name: APP_ENV
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: GOMAXPROCS
+              value: "2"
+            - name: WORKER_PREFETCH
+              value: "1"
+            - name: DATABASE_HOST
+              value: "pgbouncer-vps.database.svc.cluster.local"
+            - name: DATABASE_PORT
+              value: "5432"
+            - name: DATABASE_NAME
+              value: "finance_db"
+            - name: DATABASE_SSLMODE
+              value: "disable"
+            - name: DATABASE_BINARY_PARAMETERS
+              value: "true"
+            - name: DATABASE_USER
+              valueFrom:
+                secretKeyRef:
+                  name: finance-db-secret
+                  key: APP_USER
+            - name: DATABASE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: finance-db-secret
+                  key: APP_PASSWORD

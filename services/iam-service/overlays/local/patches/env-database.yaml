@@ -1,0 +1,32 @@
+# Local: DB via pgbouncer-vps Service (-> host pgbouncer v2 :6440), iam_app role from iam-db-secret.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: iam-service
+spec:
+  template:
+    spec:
+      containers:
+        - name: iam-service
+          env:
+            - name: APP_ENV
+              value: "local"
+              valueFrom: null
+            - name: DATABASE_HOST
+              value: "pgbouncer-vps.database.svc.cluster.local"
+            - name: DATABASE_PORT
+              value: "5432"
+            - name: DATABASE_NAME
+              value: "iam_db"
+            - name: DATABASE_SSLMODE
+              value: "disable"
+            - name: DATABASE_USER
+              valueFrom:
+                secretKeyRef:
+                  name: iam-db-secret
+                  key: APP_USER
+            - name: DATABASE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: iam-db-secret
+                  key: APP_PASSWORD

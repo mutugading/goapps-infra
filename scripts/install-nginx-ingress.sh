@@ -9,8 +9,15 @@
 
 set -e
 
+# Pinned so a VPS reset / re-bootstrap installs a known controller version instead of
+# whatever is latest that day. Bump deliberately (read the chart changelog first) and keep
+# scripts/local/install-ingress-nginx.sh on the same version. Override for a one-off:
+#   INGRESS_NGINX_CHART_VERSION=4.x.y ./scripts/install-nginx-ingress.sh
+# Check what a cluster runs: helm list -n ingress-nginx
+CHART_VERSION="${INGRESS_NGINX_CHART_VERSION:-4.15.1}"   # controller v1.15.1
+
 echo "=================================================="
-echo "  Installing NGINX Ingress Controller"
+echo "  Installing NGINX Ingress Controller (chart ${CHART_VERSION})"
 echo "=================================================="
 
 # Add ingress-nginx repository if not exists
@@ -25,6 +32,7 @@ kubectl create namespace ingress-nginx 2>/dev/null || echo "Namespace already ex
 # Install NGINX Ingress Controller
 echo "[3/3] Installing NGINX Ingress Controller..."
 helm upgrade --install ingress-nginx ingress-nginx/ingress-nginx \
+  --version "$CHART_VERSION" \
   --namespace ingress-nginx \
   --set controller.service.type=LoadBalancer \
   --set controller.ingressClassResource.default=true \

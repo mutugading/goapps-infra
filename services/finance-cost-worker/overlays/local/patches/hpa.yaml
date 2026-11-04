@@ -1,0 +1,8 @@
+# Local: single replica (metrics-server HPA kept, pinned 1..1).
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: finance-cost-worker-hpa
+spec:
+  minReplicas: 1
+  maxReplicas: 1

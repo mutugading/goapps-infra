@@ -1,0 +1,37 @@
+# Local k3s: DB via pgbouncer-vps Service (maps to host pgbouncer v2 :6440).
+# Creds from finance-db-secret (base/local/credentials). Env above DATABASE restated
+# from base only to preserve ordering (same as staging).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: finance-cost-orchestrator
+spec:
+  template:
+    spec:
+      containers:
+        - name: finance-cost-orchestrator
+          env:
+            - name: APP_ENV
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: DATABASE_HOST
+              value: "pgbouncer-vps.database.svc.cluster.local"
+            - name: DATABASE_PORT
+              value: "5432"
+            - name: DATABASE_NAME
+              value: "finance_db"
+            - name: DATABASE_SSLMODE
+              value: "disable"
+            - name: DATABASE_BINARY_PARAMETERS
+              value: "true"
+            - name: DATABASE_USER
+              valueFrom:
+                secretKeyRef:
+                  name: finance-db-secret
+                  key: APP_USER
+            - name: DATABASE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: finance-db-secret
+                  key: APP_PASSWORD

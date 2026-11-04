@@ -1,0 +1,24 @@
+# Local: single replica, small resources, locally loaded image, tracing off.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: iam-service
+spec:
+  replicas: 1
+  template:
+    spec:
+      containers:
+        - name: iam-service
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: TRACING_ENABLED
+              value: "false"
+            - name: JAEGER_ENDPOINT
+              value: ""
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"

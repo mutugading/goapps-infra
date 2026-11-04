@@ -1,0 +1,19 @@
+# Local MinIO (host, plain HTTP via minio.minio Service). Bucket must exist locally.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: iam-service
+spec:
+  template:
+    spec:
+      containers:
+        - name: iam-service
+          env:
+            - name: STORAGE_BUCKET
+              value: "goapps-staging"
+            - name: STORAGE_USE_SSL
+              value: "false"
+            - name: STORAGE_INSECURE_SKIP_VERIFY
+              value: "false"
+            - name: STORAGE_PUBLIC_URL
+              value: "http://localhost:9000"   # browser reaches host MinIO directly

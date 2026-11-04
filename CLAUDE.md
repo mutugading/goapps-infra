@@ -122,6 +122,16 @@ make lint                   # Dry-run validate all base kustomizations
 make reset                  # Uninstall K3s entirely (DESTRUCTIVE, requires confirmation)
 ```
 
+### Local K3s cluster
+
+Cluster k3s lokal mirip staging (Colima profile `k8s`, context `colima-k8s`, ns `goapps-local`). Target ada di `local.mk`:
+
+```bash
+make local-help     # daftar target local-*
+```
+
+Runbook lengkap: [docs/LOCAL_K3S_GUIDE.md](docs/LOCAL_K3S_GUIDE.md).
+
 ### Kustomize Commands
 
 ```bash

@@ -1,0 +1,183 @@
+# Selector-less Services + EndpointSlices pointing at the Mac host data layer
+# (docker compose on Colima profile `default`), reached from the k8s VM via
+# 192.168.5.2 (host.lima.internal). Ports verified in P1-T1.
+# Service names mirror staging (e.g. minio.minio.svc, pgbouncer-vps.database.svc).
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pgbouncer-vps
+  namespace: database
+  labels:
+    app: pgbouncer-vps
+    environment: local
+spec:
+  type: ClusterIP
+  ports:
+    - name: postgresql
+      port: 5432
+      targetPort: 5432
+      protocol: TCP
+---
+apiVersion: discovery.k8s.io/v1
+kind: EndpointSlice
+metadata:
+  name: pgbouncer-vps
+  namespace: database
+  labels:
+    kubernetes.io/service-name: pgbouncer-vps
+addressType: IPv4
+endpoints:
+  - addresses:
+      - 192.168.5.2
+    conditions:
+      ready: true
+ports:
+    - name: postgresql
+      port: 6440
+      protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: database
+  labels:
+    app: redis
+    environment: local
+spec:
+  type: ClusterIP
+  ports:
+    - name: redis
+      port: 6379
+      targetPort: 6379
+      protocol: TCP
+---
+apiVersion: discovery.k8s.io/v1
+kind: EndpointSlice
+metadata:
+  name: redis
+  namespace: database
+  labels:
+    kubernetes.io/service-name: redis
+addressType: IPv4
+endpoints:
+  - addresses:
+      - 192.168.5.2
+    conditions:
+      ready: true
+ports:
+    - name: redis
+      port: 6379
+      protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rabbitmq
+  namespace: database
+  labels:
+    app: rabbitmq
+    environment: local
+spec:
+  type: ClusterIP
+  ports:
+    - name: amqp
+      port: 5672
+      targetPort: 5672
+      protocol: TCP
+---
+apiVersion: discovery.k8s.io/v1
+kind: EndpointSlice
+metadata:
+  name: rabbitmq
+  namespace: database
+  labels:
+    kubernetes.io/service-name: rabbitmq
+addressType: IPv4
+endpoints:
+  - addresses:
+      - 192.168.5.2
+    conditions:
+      ready: true
+ports:
+    - name: amqp
+      port: 5672
+      protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: minio
+  namespace: minio
+  labels:
+    app: minio
+    environment: local
+spec:
+  type: ClusterIP
+  ports:
+    - name: s3
+      port: 9000
+      targetPort: 9000
+      protocol: TCP
+    - name: console
+      port: 9001
+      targetPort: 9001
+      protocol: TCP
+---
+apiVersion: discovery.k8s.io/v1
+kind: EndpointSlice
+metadata:
+  name: minio
+  namespace: minio
+  labels:
+    kubernetes.io/service-name: minio
+addressType: IPv4
+endpoints:
+  - addresses:
+      - 192.168.5.2
+    conditions:
+      ready: true
+ports:
+    - name: s3
+      port: 9000
+      protocol: TCP
+    - name: console
+      port: 9001
+      protocol: TCP
+---
+# postgres-v2: DIRECT (non-pooled) path to pg v2 on the host (:5440), for opt-in
+# migrate/seed Jobs (DDL, advisory locks, session options don't work via PgBouncer).
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-v2
+  namespace: database
+  labels:
+    app: postgres-v2
+    environment: local
+spec:
+  type: ClusterIP
+  ports:
+    - name: postgresql
+      port: 5432
+      targetPort: 5432
+      protocol: TCP
+---
+apiVersion: discovery.k8s.io/v1
+kind: EndpointSlice
+metadata:
+  name: postgres-v2
+  namespace: database
+  labels:
+    kubernetes.io/service-name: postgres-v2
+addressType: IPv4
+endpoints:
+  - addresses:
+      - 192.168.5.2
+    conditions:
+      ready: true
+ports:
+    - name: postgresql
+      port: 5440
+      protocol: TCP

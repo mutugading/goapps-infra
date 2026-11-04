@@ -1,0 +1,17 @@
+# Local: local image, no ghcr pull secret, tracing off (no Jaeger locally).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: finance-cost-orchestrator
+spec:
+  template:
+    spec:
+      imagePullSecrets: null
+      containers:
+        - name: finance-cost-orchestrator
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: TRACING_ENABLED
+              value: "false"
+            - name: JAEGER_ENDPOINT
+              value: ""

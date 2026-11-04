@@ -3,6 +3,9 @@
 
 .PHONY: help bootstrap install-monitoring install-argocd apply-staging apply-production reset deploy-iam-staging deploy-iam-production
 
+.DEFAULT_GOAL := help
+-include local.mk
+
 # Colors
 GREEN := \033[0;32m
 YELLOW := \033[0;33m
@@ -26,6 +29,9 @@ help:
 	@echo "  make deploy-finance-production  - Deploy finance-service to production"
 	@echo "  make deploy-iam-staging         - Deploy iam-service to staging"
 	@echo "  make deploy-iam-production      - Deploy iam-service to production"
+	@echo ""
+	@echo "$(YELLOW)Local k3s cluster:$(NC)"
+	@echo "  make local-help          - Local Colima k3s targets"
 	@echo ""
 	@echo "$(YELLOW)Maintenance:$(NC)"
 	@echo "  make status              - Cluster status"
