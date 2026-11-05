@@ -1,14 +1,12 @@
 # Per-environment database endpoint for production.
-# Values here are IDENTICAL to base/deployment.yaml today: this file exists so the
-# production endpoint can be changed WITHOUT touching the other environment.
-#
-# Credentials (DATABASE_USER / DATABASE_PASSWORD) stay in base/, sourced from
-# the postgres-secret Secret. Never put credentials in this file.
+# DB v2 cutover: traffic goes through pgbouncer-vps (in-cluster, no TLS on the
+# pod->pgbouncer hop; pgbouncer->VPS 192.168.0.40 is TLS). Runtime services use the
+# DML-only `finance_app` role from Secret `finance-db-secret` (keys APP_USER/APP_PASSWORD).
+# Never put credentials in this file. See docs/db-v2-cutover.md.
 #
 # The env vars above the DATABASE block are restated verbatim from base/ ONLY to
 # preserve the rendered env-list ordering (strategic merge appends unmatched
-# entries), keeping `kustomize build` byte-identical. This patch is listed FIRST
-# in kustomization.yaml for the same reason.
+# entries). This patch is listed FIRST in kustomization.yaml for the same reason.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -28,10 +26,22 @@ spec:
             - name: WORKER_PREFETCH
               value: "1"
             - name: DATABASE_HOST
-              value: "pgbouncer.database.svc.cluster.local"
+              value: "pgbouncer-vps.database.svc.cluster.local"
             - name: DATABASE_PORT
               value: "5432"
             - name: DATABASE_NAME
-              value: "goapps"
+              value: "finance_db"
             - name: DATABASE_SSLMODE
               value: "disable"
+            - name: DATABASE_BINARY_PARAMETERS
+              value: "true"
+            - name: DATABASE_USER
+              valueFrom:
+                secretKeyRef:
+                  name: finance-db-secret
+                  key: APP_USER
+            - name: DATABASE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: finance-db-secret
+                  key: APP_PASSWORD

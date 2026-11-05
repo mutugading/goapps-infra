@@ -1,0 +1,28 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: iam-seed
+spec:
+  template:
+    spec:
+      containers:
+        - name: iam-seeder
+          env:
+            - name: DATABASE_HOST
+              value: "192.168.0.40"
+            - name: DATABASE_PORT
+              value: "5432"
+            - name: DATABASE_NAME
+              value: "iam_db"
+            - name: DATABASE_SSLMODE
+              value: "require"
+            - name: DATABASE_USER
+              valueFrom:
+                secretKeyRef:
+                  name: iam-db-secret
+                  key: OWNER_USER
+            - name: DATABASE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: iam-db-secret
+                  key: OWNER_PASSWORD
