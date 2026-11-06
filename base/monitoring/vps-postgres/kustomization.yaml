@@ -1,0 +1,9 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Scrape targets for the external Postgres VPS (node_exporter :9100 and
+# postgres_exporter :9187). Selector-less Service + Endpoints + ServiceMonitor:
+# works with the existing Prometheus (serviceMonitorSelectorNilUsesHelmValues:
+# false), no helm upgrade needed. Use an env overlay, not this base directly.
+resources:
+  - vps-targets.yaml
