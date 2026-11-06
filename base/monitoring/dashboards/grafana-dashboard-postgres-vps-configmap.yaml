@@ -1,0 +1,1360 @@
+# Dashboard for the external Postgres VPS (exporters on :9100/:9187).
+# Applied like the other dashboard ConfigMaps (single `kubectl apply -f`).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-postgres-vps
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+data:
+  postgresql-vps.json: |
+    {
+      "title": "PostgreSQL VPS",
+      "uid": "postgres-vps-dashboard",
+      "tags": [
+        "postgres",
+        "vps"
+      ],
+      "schemaVersion": 39,
+      "version": 1,
+      "editable": true,
+      "timezone": "browser",
+      "refresh": "1m",
+      "time": {
+        "from": "now-6h",
+        "to": "now"
+      },
+      "annotations": {
+        "list": []
+      },
+      "links": [],
+      "panels": [
+        {
+          "type": "row",
+          "title": "Status",
+          "collapsed": false,
+          "id": 1,
+          "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 0
+          },
+          "panels": []
+        },
+        {
+          "id": 2,
+          "type": "stat",
+          "title": "Postgres exporter up (pg_up)",
+          "description": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "pg_up{job=\"vps-postgres\",instance=\"$instance\"}",
+              "legendFormat": "pg_up",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "instant": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "red",
+                    "value": null
+                  },
+                  {
+                    "color": "green",
+                    "value": 1
+                  }
+                ]
+              },
+              "mappings": [
+                {
+                  "type": "value",
+                  "options": {
+                    "0": {
+                      "text": "DOWN"
+                    },
+                    "1": {
+                      "text": "UP"
+                    }
+                  }
+                }
+              ]
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 0,
+            "y": 1
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "background"
+          }
+        },
+        {
+          "id": 3,
+          "type": "stat",
+          "title": "Postgres scrape up",
+          "description": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "up{job=\"vps-postgres\",instance=\"$instance\"}",
+              "legendFormat": "up",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "instant": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "red",
+                    "value": null
+                  },
+                  {
+                    "color": "green",
+                    "value": 1
+                  }
+                ]
+              },
+              "mappings": [
+                {
+                  "type": "value",
+                  "options": {
+                    "0": {
+                      "text": "DOWN"
+                    },
+                    "1": {
+                      "text": "UP"
+                    }
+                  }
+                }
+              ]
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 4,
+            "y": 1
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "background"
+          }
+        },
+        {
+          "id": 4,
+          "type": "stat",
+          "title": "Node exporter up",
+          "description": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "up{job=\"vps-node\",instance=\"$instance\"}",
+              "legendFormat": "up",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "instant": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "red",
+                    "value": null
+                  },
+                  {
+                    "color": "green",
+                    "value": 1
+                  }
+                ]
+              },
+              "mappings": [
+                {
+                  "type": "value",
+                  "options": {
+                    "0": {
+                      "text": "DOWN"
+                    },
+                    "1": {
+                      "text": "UP"
+                    }
+                  }
+                }
+              ]
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 8,
+            "y": 1
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "background"
+          }
+        },
+        {
+          "id": 5,
+          "type": "stat",
+          "title": "Uptime (postmaster)",
+          "description": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "time() - pg_postmaster_start_time_seconds{instance=\"$instance\"}",
+              "legendFormat": "uptime",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "instant": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 12,
+            "y": 1
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "background"
+          }
+        },
+        {
+          "id": 6,
+          "type": "stat",
+          "title": "Total connections / max",
+          "description": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "pg_vps_settings_total_connections{instance=\"$instance\"} / pg_vps_settings_max_connections{instance=\"$instance\"}",
+              "legendFormat": "usage",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "instant": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percentunit",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "orange",
+                    "value": 0.7
+                  },
+                  {
+                    "color": "red",
+                    "value": 0.8
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 18,
+            "y": 1
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "background"
+          }
+        },
+        {
+          "type": "row",
+          "title": "Connections",
+          "collapsed": false,
+          "id": 7,
+          "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 5
+          },
+          "panels": []
+        },
+        {
+          "id": 8,
+          "type": "timeseries",
+          "title": "Connections per database vs max_connections",
+          "description": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum by (datname) (pg_stat_database_numbackends{instance=\"$instance\",datname=~\"$datname\"})",
+              "legendFormat": "{{datname}}",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              }
+            },
+            {
+              "refId": "B",
+              "expr": "pg_vps_settings_max_connections{instance=\"$instance\"}",
+              "legendFormat": "max_connections",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 0,
+            "y": 6
+          }
+        },
+        {
+          "id": 9,
+          "type": "timeseries",
+          "title": "Connections per role / state",
+          "description": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum by (usename, state) (pg_vps_activity_conns{instance=\"$instance\",datname=~\"$datname\"})",
+              "legendFormat": "{{usename}} {{state}}",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 12,
+            "y": 6
+          }
+        },
+        {
+          "type": "row",
+          "title": "Throughput and efficiency",
+          "collapsed": false,
+          "id": 10,
+          "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 13
+          },
+          "panels": []
+        },
+        {
+          "id": 11,
+          "type": "timeseries",
+          "title": "TPS (commit + rollback)",
+          "description": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum by (datname) (rate(pg_stat_database_xact_commit{instance=\"$instance\",datname=~\"$datname\"}[5m]) + rate(pg_stat_database_xact_rollback{instance=\"$instance\",datname=~\"$datname\"}[5m]))",
+              "legendFormat": "{{datname}}",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "ops"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 8,
+            "x": 0,
+            "y": 14
+          }
+        },
+        {
+          "id": 12,
+          "type": "timeseries",
+          "title": "Rollback ratio",
+          "description": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "rate(pg_stat_database_xact_rollback{instance=\"$instance\",datname=~\"$datname\"}[5m]) / (rate(pg_stat_database_xact_commit{instance=\"$instance\",datname=~\"$datname\"}[5m]) + rate(pg_stat_database_xact_rollback{instance=\"$instance\",datname=~\"$datname\"}[5m]))",
+              "legendFormat": "{{datname}}",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percentunit"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 8,
+            "x": 8,
+            "y": 14
+          }
+        },
+        {
+          "id": 13,
+          "type": "timeseries",
+          "title": "Cache hit ratio",
+          "description": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "rate(pg_stat_database_blks_hit{instance=\"$instance\",datname=~\"$datname\"}[5m]) / (rate(pg_stat_database_blks_hit{instance=\"$instance\",datname=~\"$datname\"}[5m]) + rate(pg_stat_database_blks_read{instance=\"$instance\",datname=~\"$datname\"}[5m]))",
+              "legendFormat": "{{datname}}",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percentunit"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 8,
+            "x": 16,
+            "y": 14
+          }
+        },
+        {
+          "id": 14,
+          "type": "timeseries",
+          "title": "Deadlocks (increase 1h)",
+          "description": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "increase(pg_stat_database_deadlocks{instance=\"$instance\",datname=~\"$datname\"}[1h])",
+              "legendFormat": "{{datname}}",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 8,
+            "x": 0,
+            "y": 21
+          }
+        },
+        {
+          "id": 15,
+          "type": "timeseries",
+          "title": "Locks by mode",
+          "description": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum by (mode) (pg_vps_locks_locks{instance=\"$instance\",datname=~\"$datname\"})",
+              "legendFormat": "{{mode}}",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 8,
+            "x": 8,
+            "y": 21
+          }
+        },
+        {
+          "id": 16,
+          "type": "timeseries",
+          "title": "Waiting (ungranted) locks",
+          "description": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum by (datname) (pg_vps_locks_waiting{instance=\"$instance\",datname=~\"$datname\"})",
+              "legendFormat": "{{datname}}",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 8,
+            "x": 16,
+            "y": 21
+          }
+        },
+        {
+          "type": "row",
+          "title": "Transactions",
+          "collapsed": false,
+          "id": 17,
+          "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 28
+          },
+          "panels": []
+        },
+        {
+          "id": 18,
+          "type": "timeseries",
+          "title": "Oldest open transaction age",
+          "description": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "max by (datname) (pg_vps_activity_max_xact_age_seconds{instance=\"$instance\",datname=~\"$datname\"})",
+              "legendFormat": "{{datname}}",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 0,
+            "y": 29
+          }
+        },
+        {
+          "id": 19,
+          "type": "timeseries",
+          "title": "Idle-in-transaction: connections and longest age",
+          "description": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum by (datname) (pg_vps_activity_conns{instance=\"$instance\",datname=~\"$datname\",state=\"idle in transaction\"})",
+              "legendFormat": "conns {{datname}}",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              }
+            },
+            {
+              "refId": "B",
+              "expr": "max by (datname) (pg_vps_activity_max_state_age_seconds{instance=\"$instance\",datname=~\"$datname\",state=\"idle in transaction\"})",
+              "legendFormat": "age(s) {{datname}}",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 12,
+            "y": 29
+          }
+        },
+        {
+          "type": "row",
+          "title": "Storage",
+          "collapsed": false,
+          "id": 20,
+          "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 36
+          },
+          "panels": []
+        },
+        {
+          "id": 21,
+          "type": "timeseries",
+          "title": "Database size",
+          "description": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "pg_vps_database_size_bytes{instance=\"$instance\",datname=~\"$datname\"}",
+              "legendFormat": "{{datname}}",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "bytes"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 8,
+            "x": 0,
+            "y": 37
+          }
+        },
+        {
+          "id": 22,
+          "type": "timeseries",
+          "title": "Dead tuples (needs per-DB collector, see guide)",
+          "description": "Empty unless pg_stat_user_tables is enabled (monitor role connection limit 3 prevents auto-discovery).",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "topk(10, pg_stat_user_tables_n_dead_tup{instance=\"$instance\",datname=~\"$datname\"})",
+              "legendFormat": "{{datname}}.{{relname}}",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 8,
+            "x": 8,
+            "y": 37
+          }
+        },
+        {
+          "id": 23,
+          "type": "timeseries",
+          "title": "Disk used % (/psqldb, /psqldb-backup)",
+          "description": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "100 - 100 * node_filesystem_avail_bytes{job=\"vps-node\",instance=\"$instance\",mountpoint=~\"/psqldb|/psqldb-backup\"} / node_filesystem_size_bytes{job=\"vps-node\",instance=\"$instance\",mountpoint=~\"/psqldb|/psqldb-backup\"}",
+              "legendFormat": "{{mountpoint}}",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percent"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 8,
+            "x": 16,
+            "y": 37
+          }
+        },
+        {
+          "type": "row",
+          "title": "Host",
+          "collapsed": false,
+          "id": 24,
+          "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 44
+          },
+          "panels": []
+        },
+        {
+          "id": 25,
+          "type": "timeseries",
+          "title": "CPU usage",
+          "description": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "100 - 100 * avg(rate(node_cpu_seconds_total{job=\"vps-node\",instance=\"$instance\",mode=\"idle\"}[5m]))",
+              "legendFormat": "cpu",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percent"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 8,
+            "x": 0,
+            "y": 45
+          }
+        },
+        {
+          "id": 26,
+          "type": "timeseries",
+          "title": "Memory used",
+          "description": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "1 - node_memory_MemAvailable_bytes{job=\"vps-node\",instance=\"$instance\"} / node_memory_MemTotal_bytes{job=\"vps-node\",instance=\"$instance\"}",
+              "legendFormat": "mem",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percentunit"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 8,
+            "x": 8,
+            "y": 45
+          }
+        },
+        {
+          "id": 27,
+          "type": "timeseries",
+          "title": "Network (non-lo)",
+          "description": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum by (device) (rate(node_network_receive_bytes_total{job=\"vps-node\",instance=\"$instance\",device!~\"lo|docker.*|veth.*\"}[5m]))",
+              "legendFormat": "rx {{device}}",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              }
+            },
+            {
+              "refId": "B",
+              "expr": "-sum by (device) (rate(node_network_transmit_bytes_total{job=\"vps-node\",instance=\"$instance\",device!~\"lo|docker.*|veth.*\"}[5m]))",
+              "legendFormat": "tx {{device}}",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "Bps"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 8,
+            "x": 16,
+            "y": 45
+          }
+        },
+        {
+          "type": "row",
+          "title": "Backup and restore test",
+          "collapsed": false,
+          "id": 28,
+          "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 52
+          },
+          "panels": []
+        },
+        {
+          "id": 29,
+          "type": "stat",
+          "title": "Last backup run age",
+          "description": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "time() - goapps_pg_backup_last_run_timestamp_seconds{job=\"vps-node\",instance=\"$instance\"}",
+              "legendFormat": "age",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "instant": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 32400
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 0,
+            "y": 53
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "background"
+          }
+        },
+        {
+          "id": 30,
+          "type": "stat",
+          "title": "Last backup success",
+          "description": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "goapps_pg_backup_last_success{job=\"vps-node\",instance=\"$instance\"}",
+              "legendFormat": "ok",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "instant": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "red",
+                    "value": null
+                  },
+                  {
+                    "color": "green",
+                    "value": 1
+                  }
+                ]
+              },
+              "mappings": [
+                {
+                  "type": "value",
+                  "options": {
+                    "0": {
+                      "text": "FAILED"
+                    },
+                    "1": {
+                      "text": "OK"
+                    }
+                  }
+                }
+              ]
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 6,
+            "y": 53
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "background"
+          }
+        },
+        {
+          "id": 31,
+          "type": "stat",
+          "title": "Backup duration",
+          "description": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "goapps_pg_backup_duration_seconds{job=\"vps-node\",instance=\"$instance\"}",
+              "legendFormat": "dur",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "instant": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 10,
+            "y": 53
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "background"
+          }
+        },
+        {
+          "id": 32,
+          "type": "stat",
+          "title": "Restore test last success",
+          "description": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "goapps_pg_restore_test_last_success{job=\"vps-node\",instance=\"$instance\"}",
+              "legendFormat": "ok",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "instant": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "red",
+                    "value": null
+                  },
+                  {
+                    "color": "green",
+                    "value": 1
+                  }
+                ]
+              },
+              "mappings": [
+                {
+                  "type": "value",
+                  "options": {
+                    "0": {
+                      "text": "FAILED"
+                    },
+                    "1": {
+                      "text": "OK"
+                    }
+                  }
+                }
+              ]
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 14,
+            "y": 53
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "background"
+          }
+        },
+        {
+          "id": 33,
+          "type": "stat",
+          "title": "Restore test age",
+          "description": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "time() - goapps_pg_restore_test_last_run_timestamp_seconds{job=\"vps-node\",instance=\"$instance\"}",
+              "legendFormat": "age",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "instant": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 691200
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 18,
+            "y": 53
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "background"
+          }
+        },
+        {
+          "id": 34,
+          "type": "timeseries",
+          "title": "Backup size per DB",
+          "description": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "goapps_pg_backup_size_bytes{job=\"vps-node\",instance=\"$instance\"}",
+              "legendFormat": "{{db}}",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "bytes"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 24,
+            "x": 0,
+            "y": 57
+          }
+        }
+      ],
+      "templating": {
+        "list": [
+          {
+            "name": "datasource",
+            "label": "Datasource",
+            "type": "datasource",
+            "query": "prometheus",
+            "refresh": 1,
+            "current": {}
+          },
+          {
+            "name": "instance",
+            "label": "Instance",
+            "type": "query",
+            "datasource": {
+              "type": "prometheus",
+              "uid": "${datasource}"
+            },
+            "query": {
+              "query": "label_values(up{job=\"vps-postgres\"}, instance)",
+              "refId": "instance"
+            },
+            "refresh": 2,
+            "regex": ".*",
+            "includeAll": false,
+            "multi": false,
+            "sort": 1
+          },
+          {
+            "name": "datname",
+            "label": "Database",
+            "type": "query",
+            "datasource": {
+              "type": "prometheus",
+              "uid": "${datasource}"
+            },
+            "query": {
+              "query": "label_values(pg_stat_database_numbackends{instance=\"$instance\"}, datname)",
+              "refId": "datname"
+            },
+            "refresh": 2,
+            "regex": "/^(iam_db|finance_db|ppc_db)$/",
+            "includeAll": true,
+            "multi": true,
+            "sort": 1,
+            "current": {
+              "selected": true,
+              "text": "All",
+              "value": "$__all"
+            },
+            "allValue": ".*"
+          }
+        ]
+      }
+    }
