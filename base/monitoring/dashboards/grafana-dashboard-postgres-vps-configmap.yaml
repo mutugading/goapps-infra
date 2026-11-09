@@ -17,7 +17,7 @@ data:
         "vps"
       ],
       "schemaVersion": 39,
-      "version": 2,
+      "version": 3,
       "editable": true,
       "timezone": "browser",
       "refresh": "1m",
@@ -944,7 +944,7 @@ data:
           "id": 22,
           "type": "timeseries",
           "title": "Dead tuples (top 10)",
-          "description": "Needs the OPTIONAL per-DB exporter variant (b6-guide B6.6). No data otherwise.",
+          "description": "Estimated dead tuples per table (top 10 across selected DBs). Source: custom query pg_vps_tables (exporter run with --auto-discover-databases, see b6-guide B6.6c). Empty if the per-DB flags are not enabled.",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
@@ -952,8 +952,8 @@ data:
           "targets": [
             {
               "refId": "A",
-              "expr": "topk(10, pg_stat_user_tables_n_dead_tup{instance=\"$instance\",datname=~\"$datname\"})",
-              "legendFormat": "{{datname}}.{{relname}}",
+              "expr": "topk(10, pg_vps_tables_n_dead_tup{instance=\"$instance\",datname=~\"$datname\"})",
+              "legendFormat": "{{datname}}.{{schemaname}}.{{relname}}",
               "datasource": {
                 "type": "prometheus",
                 "uid": "${datasource}"
@@ -1045,6 +1045,100 @@ data:
             "h": 7,
             "w": 8,
             "x": 0,
+            "y": 58
+          }
+        },
+        {
+          "id": 120,
+          "type": "bargauge",
+          "title": "Largest tables (top 10)",
+          "description": "Total size incl. indexes and TOAST. Source: pg_vps_tables (top 15 by size and by dead tuples per DB).",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "topk(10, pg_vps_tables_total_bytes{instance=\"$instance\",datname=~\"$datname\"})",
+              "legendFormat": "{{datname}}.{{schemaname}}.{{relname}}",
+              "instant": true,
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              }
+            }
+          ],
+          "options": {
+            "orientation": "horizontal",
+            "displayMode": "gradient",
+            "showUnfilled": true,
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            }
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "bytes",
+              "min": 0
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 8,
+            "x": 8,
+            "y": 58
+          }
+        },
+        {
+          "id": 121,
+          "type": "bargauge",
+          "title": "Dead tuple ratio (top 10)",
+          "description": "n_dead_tup / (n_dead_tup + n_live_tup). Estimate from pg_stat_user_tables; small tables can show high ratios.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "topk(10, pg_vps_tables_n_dead_tup{instance=\"$instance\",datname=~\"$datname\"} / clamp_min(pg_vps_tables_n_dead_tup{instance=\"$instance\",datname=~\"$datname\"} + pg_vps_tables_n_live_tup{instance=\"$instance\",datname=~\"$datname\"}, 1))",
+              "legendFormat": "{{datname}}.{{schemaname}}.{{relname}}",
+              "instant": true,
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              }
+            }
+          ],
+          "options": {
+            "orientation": "horizontal",
+            "displayMode": "gradient",
+            "showUnfilled": true,
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            }
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percentunit",
+              "min": 0
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 8,
+            "x": 16,
             "y": 58
           }
         },

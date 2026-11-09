@@ -616,3 +616,43 @@ data:
             labels:
               severity: warning
             isPaused: false
+
+          - uid: vps-table-bloat
+            title: VPS PostgreSQL table bloat
+            condition: C
+            data:
+              - refId: A
+                relativeTimeRange:
+                  from: 300
+                  to: 0
+                datasourceUid: prometheus
+                model:
+                  expr: 'pg_vps_tables_n_dead_tup{job="vps-postgres"} / clamp_min(pg_vps_tables_n_dead_tup{job="vps-postgres"} + pg_vps_tables_n_live_tup{job="vps-postgres"}, 1) > 0.2 and pg_vps_tables_n_dead_tup{job="vps-postgres"} > 100000'
+                  refId: A
+              - refId: C
+                relativeTimeRange:
+                  from: 0
+                  to: 0
+                datasourceUid: __expr__
+                model:
+                  conditions:
+                    - evaluator:
+                        params: [0]
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params: [A]
+                      reducer:
+                        type: last
+                  refId: C
+                  type: classic_conditions
+            noDataState: OK
+            execErrState: Error
+            for: 1h
+            annotations:
+              summary: "Table bloat on {{ $labels.datname }}.{{ $labels.relname }}"
+              description: "Dead tuples above 20% and over 100000 for 1h; check autovacuum"
+            labels:
+              severity: warning
+            isPaused: false
