@@ -1,0 +1,658 @@
+# Grafana alert rules for the external Postgres VPS (exporters on :9100/:9187).
+# Same provisioning format / contact routing as postgres-alerts.yaml.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-vps-alerts
+  namespace: monitoring
+  labels:
+    grafana_alert: "1"
+data:
+  postgres-vps-alerts.yaml: |
+    apiVersion: 1
+    groups:
+      - orgId: 1
+        name: PostgreSQL VPS Alerts
+        folder: Database
+        interval: 1m
+        rules:
+          - uid: vps-postgres-down
+            title: VPS PostgreSQL Down
+            condition: C
+            data:
+              - refId: A
+                relativeTimeRange:
+                  from: 300
+                  to: 0
+                datasourceUid: prometheus
+                model:
+                  expr: '(pg_up{job="vps-postgres"} == 0) or (up{job="vps-postgres"} == 0)'
+                  refId: A
+              - refId: C
+                relativeTimeRange:
+                  from: 0
+                  to: 0
+                datasourceUid: __expr__
+                model:
+                  conditions:
+                    - evaluator:
+                        params: [0]
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params: [A]
+                      reducer:
+                        type: last
+                  refId: C
+                  type: classic_conditions
+            noDataState: OK
+            execErrState: Error
+            for: 5m
+            annotations:
+              summary: "PostgreSQL VPS {{ $labels.instance }} is down"
+              description: "pg_up==0 or the postgres_exporter scrape fails for 5m"
+            labels:
+              severity: critical
+            isPaused: false
+
+          - uid: vps-node-exporter-down
+            title: VPS Node Exporter Down
+            condition: C
+            data:
+              - refId: A
+                relativeTimeRange:
+                  from: 300
+                  to: 0
+                datasourceUid: prometheus
+                model:
+                  expr: 'up{job="vps-node"} == 0'
+                  refId: A
+              - refId: C
+                relativeTimeRange:
+                  from: 0
+                  to: 0
+                datasourceUid: __expr__
+                model:
+                  conditions:
+                    - evaluator:
+                        params: [0]
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params: [A]
+                      reducer:
+                        type: last
+                  refId: C
+                  type: classic_conditions
+            noDataState: OK
+            execErrState: Error
+            for: 5m
+            annotations:
+              summary: "node_exporter on VPS {{ $labels.instance }} is not scraped"
+              description: "Host metrics (disk, backup status) unavailable; host may be down"
+            labels:
+              severity: critical
+            isPaused: false
+
+          - uid: vps-backup-stale
+            title: VPS Backup Stale or Failed
+            condition: C
+            data:
+              - refId: A
+                relativeTimeRange:
+                  from: 300
+                  to: 0
+                datasourceUid: prometheus
+                model:
+                  expr: '(time() - goapps_pg_backup_last_run_timestamp_seconds{job="vps-node"} > 32400) or (goapps_pg_backup_last_success{job="vps-node"} == 0) or absent(goapps_pg_backup_last_run_timestamp_seconds{job="vps-node"})'
+                  refId: A
+              - refId: C
+                relativeTimeRange:
+                  from: 0
+                  to: 0
+                datasourceUid: __expr__
+                model:
+                  conditions:
+                    - evaluator:
+                        params: [0]
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params: [A]
+                      reducer:
+                        type: last
+                  refId: C
+                  type: classic_conditions
+            noDataState: OK
+            execErrState: Error
+            for: 0s
+            annotations:
+              summary: "pg-backup on {{ $labels.instance }} older than 9h or last run failed"
+              description: "Timers run 04/12/20 WIB. Check journalctl -u pg-backup on the VPS"
+            labels:
+              severity: critical
+            isPaused: false
+
+          - uid: vps-disk-high
+            title: VPS Postgres Disk Above 80%
+            condition: C
+            data:
+              - refId: A
+                relativeTimeRange:
+                  from: 300
+                  to: 0
+                datasourceUid: prometheus
+                model:
+                  expr: '100 - 100 * node_filesystem_avail_bytes{job="vps-node",mountpoint=~"/psqldb|/psqldb-backup"} / node_filesystem_size_bytes{job="vps-node",mountpoint=~"/psqldb|/psqldb-backup"} > 80'
+                  refId: A
+              - refId: C
+                relativeTimeRange:
+                  from: 0
+                  to: 0
+                datasourceUid: __expr__
+                model:
+                  conditions:
+                    - evaluator:
+                        params: [0]
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params: [A]
+                      reducer:
+                        type: last
+                  refId: C
+                  type: classic_conditions
+            noDataState: OK
+            execErrState: Error
+            for: 10m
+            annotations:
+              summary: "{{ $labels.mountpoint }} on {{ $labels.instance }} above 80% used"
+              description: "Data or backup volume filling up"
+            labels:
+              severity: warning
+            isPaused: false
+
+          - uid: vps-connections-high
+            title: VPS PostgreSQL Connections Above 80%
+            condition: C
+            data:
+              - refId: A
+                relativeTimeRange:
+                  from: 300
+                  to: 0
+                datasourceUid: prometheus
+                model:
+                  expr: 'pg_vps_settings_total_connections{job="vps-postgres"} / pg_vps_settings_max_connections{job="vps-postgres"} * 100 > 80'
+                  refId: A
+              - refId: C
+                relativeTimeRange:
+                  from: 0
+                  to: 0
+                datasourceUid: __expr__
+                model:
+                  conditions:
+                    - evaluator:
+                        params: [0]
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params: [A]
+                      reducer:
+                        type: last
+                  refId: C
+                  type: classic_conditions
+            noDataState: OK
+            execErrState: Error
+            for: 5m
+            annotations:
+              summary: "Connections on {{ $labels.instance }} above 80% of max_connections"
+              description: "Check pgbouncer pools and idle-in-transaction sessions"
+            labels:
+              severity: warning
+            isPaused: false
+
+          - uid: vps-long-transaction
+            title: VPS PostgreSQL Transaction Over 5 Minutes
+            condition: C
+            data:
+              - refId: A
+                relativeTimeRange:
+                  from: 300
+                  to: 0
+                datasourceUid: prometheus
+                model:
+                  expr: 'max by (instance, datname) (pg_vps_activity_max_xact_age_seconds{job="vps-postgres"}) > 300'
+                  refId: A
+              - refId: C
+                relativeTimeRange:
+                  from: 0
+                  to: 0
+                datasourceUid: __expr__
+                model:
+                  conditions:
+                    - evaluator:
+                        params: [0]
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params: [A]
+                      reducer:
+                        type: last
+                  refId: C
+                  type: classic_conditions
+            noDataState: OK
+            execErrState: Error
+            for: 2m
+            annotations:
+              summary: "Transaction open > 5m in {{ $labels.datname }} on {{ $labels.instance }}"
+              description: "Long transaction blocks vacuum and can hold locks"
+            labels:
+              severity: warning
+            isPaused: false
+
+          - uid: vps-idle-in-transaction
+            title: VPS PostgreSQL Idle In Transaction Over 5 Minutes
+            condition: C
+            data:
+              - refId: A
+                relativeTimeRange:
+                  from: 300
+                  to: 0
+                datasourceUid: prometheus
+                model:
+                  expr: 'max by (instance, datname) (pg_vps_activity_max_state_age_seconds{job="vps-postgres",state="idle in transaction"}) > 300'
+                  refId: A
+              - refId: C
+                relativeTimeRange:
+                  from: 0
+                  to: 0
+                datasourceUid: __expr__
+                model:
+                  conditions:
+                    - evaluator:
+                        params: [0]
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params: [A]
+                      reducer:
+                        type: last
+                  refId: C
+                  type: classic_conditions
+            noDataState: OK
+            execErrState: Error
+            for: 2m
+            annotations:
+              summary: "Session idle in transaction > 5m in {{ $labels.datname }} on {{ $labels.instance }}"
+              description: "Application leaking transactions"
+            labels:
+              severity: warning
+            isPaused: false
+
+          - uid: vps-deadlocks
+            title: VPS PostgreSQL Deadlocks
+            condition: C
+            data:
+              - refId: A
+                relativeTimeRange:
+                  from: 300
+                  to: 0
+                datasourceUid: prometheus
+                model:
+                  expr: 'increase(pg_stat_database_deadlocks{job="vps-postgres",datname=~"iam_db|finance_db|ppc_db"}[10m]) > 0'
+                  refId: A
+              - refId: C
+                relativeTimeRange:
+                  from: 0
+                  to: 0
+                datasourceUid: __expr__
+                model:
+                  conditions:
+                    - evaluator:
+                        params: [0]
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params: [A]
+                      reducer:
+                        type: last
+                  refId: C
+                  type: classic_conditions
+            noDataState: OK
+            execErrState: Error
+            for: 0s
+            annotations:
+              summary: "Deadlock in {{ $labels.datname }} on {{ $labels.instance }}"
+              description: "Deadlock counter increased in the last 10m"
+            labels:
+              severity: warning
+            isPaused: false
+
+          - uid: vps-restore-test-failed
+            title: VPS Restore Test Failed or Overdue
+            condition: C
+            data:
+              - refId: A
+                relativeTimeRange:
+                  from: 300
+                  to: 0
+                datasourceUid: prometheus
+                model:
+                  expr: '(goapps_pg_restore_test_last_success{job="vps-node"} == 0) or (time() - goapps_pg_restore_test_last_run_timestamp_seconds{job="vps-node"} > 691200) or absent(goapps_pg_restore_test_last_run_timestamp_seconds{job="vps-node"})'
+                  refId: A
+              - refId: C
+                relativeTimeRange:
+                  from: 0
+                  to: 0
+                datasourceUid: __expr__
+                model:
+                  conditions:
+                    - evaluator:
+                        params: [0]
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params: [A]
+                      reducer:
+                        type: last
+                  refId: C
+                  type: classic_conditions
+            noDataState: OK
+            execErrState: Error
+            for: 0s
+            annotations:
+              summary: "Weekly restore test on {{ $labels.instance }} failed or not run in 8 days"
+              description: "Runs Sun 06:00; check journalctl -u pg-restore-test"
+            labels:
+              severity: critical
+            isPaused: false
+
+
+          - uid: vps-memory-high
+            title: VPS Memory Above 90%
+            condition: C
+            data:
+              - refId: A
+                relativeTimeRange:
+                  from: 300
+                  to: 0
+                datasourceUid: prometheus
+                model:
+                  expr: '(1 - node_memory_MemAvailable_bytes{job="vps-node"} / node_memory_MemTotal_bytes{job="vps-node"}) * 100 > 90'
+                  refId: A
+              - refId: C
+                relativeTimeRange:
+                  from: 0
+                  to: 0
+                datasourceUid: __expr__
+                model:
+                  conditions:
+                    - evaluator:
+                        params: [0]
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params: [A]
+                      reducer:
+                        type: last
+                  refId: C
+                  type: classic_conditions
+            noDataState: OK
+            execErrState: Error
+            for: 10m
+            annotations:
+              summary: "Memory used above 90% on {{ $labels.instance }}"
+              description: "MemAvailable below 10% of total for 10m"
+            labels:
+              severity: warning
+            isPaused: false
+
+          - uid: vps-disk-predicted-full
+            title: VPS Disk Predicted Full Within 7 Days
+            condition: C
+            data:
+              - refId: A
+                relativeTimeRange:
+                  from: 300
+                  to: 0
+                datasourceUid: prometheus
+                model:
+                  expr: 'predict_linear(node_filesystem_avail_bytes{job="vps-node",mountpoint=~"/psqldb|/psqldb-backup"}[24h], 7 * 86400) < 0'
+                  refId: A
+              - refId: C
+                relativeTimeRange:
+                  from: 0
+                  to: 0
+                datasourceUid: __expr__
+                model:
+                  conditions:
+                    - evaluator:
+                        params: [0]
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params: [A]
+                      reducer:
+                        type: last
+                  refId: C
+                  type: classic_conditions
+            noDataState: OK
+            execErrState: Error
+            for: 30m
+            annotations:
+              summary: "{{ $labels.mountpoint }} on {{ $labels.instance }} predicted full within 7 days"
+              description: "Linear projection of the last 24h free space reaches zero within 7 days"
+            labels:
+              severity: warning
+            isPaused: false
+
+          - uid: vps-iowait-high
+            title: VPS CPU iowait Above 30%
+            condition: C
+            data:
+              - refId: A
+                relativeTimeRange:
+                  from: 300
+                  to: 0
+                datasourceUid: prometheus
+                model:
+                  expr: '100 * avg by (instance) (rate(node_cpu_seconds_total{job="vps-node",mode="iowait"}[5m])) > 30'
+                  refId: A
+              - refId: C
+                relativeTimeRange:
+                  from: 0
+                  to: 0
+                datasourceUid: __expr__
+                model:
+                  conditions:
+                    - evaluator:
+                        params: [0]
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params: [A]
+                      reducer:
+                        type: last
+                  refId: C
+                  type: classic_conditions
+            noDataState: OK
+            execErrState: Error
+            for: 15m
+            annotations:
+              summary: "iowait above 30% on {{ $labels.instance }}"
+              description: "Disk is the bottleneck; check backups, checkpoints, heavy queries"
+            labels:
+              severity: warning
+            isPaused: false
+
+          - uid: vps-postgres-restarted
+            title: VPS PostgreSQL Restarted
+            condition: C
+            data:
+              - refId: A
+                relativeTimeRange:
+                  from: 300
+                  to: 0
+                datasourceUid: prometheus
+                model:
+                  expr: 'time() - pg_vps_postmaster_start_time_seconds{job="vps-postgres"} < 600'
+                  refId: A
+              - refId: C
+                relativeTimeRange:
+                  from: 0
+                  to: 0
+                datasourceUid: __expr__
+                model:
+                  conditions:
+                    - evaluator:
+                        params: [0]
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params: [A]
+                      reducer:
+                        type: last
+                  refId: C
+                  type: classic_conditions
+            noDataState: OK
+            execErrState: Error
+            for: 0s
+            annotations:
+              summary: "PostgreSQL on {{ $labels.instance }} restarted less than 10 minutes ago"
+              description: "Postmaster uptime under 10 minutes (planned restart or crash)"
+            labels:
+              severity: info
+            isPaused: false
+
+          - uid: vps-exporter-scrape-error
+            title: VPS postgres_exporter Scrape Error
+            condition: C
+            data:
+              - refId: A
+                relativeTimeRange:
+                  from: 300
+                  to: 0
+                datasourceUid: prometheus
+                model:
+                  expr: 'pg_exporter_last_scrape_error{job="vps-postgres"} == 1'
+                  refId: A
+              - refId: C
+                relativeTimeRange:
+                  from: 0
+                  to: 0
+                datasourceUid: __expr__
+                model:
+                  conditions:
+                    - evaluator:
+                        params: [0]
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params: [A]
+                      reducer:
+                        type: last
+                  refId: C
+                  type: classic_conditions
+            noDataState: OK
+            execErrState: Error
+            for: 15m
+            annotations:
+              summary: "postgres_exporter on {{ $labels.instance }} reports scrape errors"
+              description: "pg_exporter_last_scrape_error==1 for 15m: a collector or custom query fails (journalctl -u prometheus-postgres-exporter)"
+            labels:
+              severity: warning
+            isPaused: false
+
+          - uid: vps-swap-high
+            title: VPS Swap Above 50%
+            condition: C
+            data:
+              - refId: A
+                relativeTimeRange:
+                  from: 300
+                  to: 0
+                datasourceUid: prometheus
+                model:
+                  expr: '(1 - node_memory_SwapFree_bytes{job="vps-node"} / node_memory_SwapTotal_bytes{job="vps-node"}) * 100 > 50 and node_memory_SwapTotal_bytes{job="vps-node"} > 0'
+                  refId: A
+              - refId: C
+                relativeTimeRange:
+                  from: 0
+                  to: 0
+                datasourceUid: __expr__
+                model:
+                  conditions:
+                    - evaluator:
+                        params: [0]
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params: [A]
+                      reducer:
+                        type: last
+                  refId: C
+                  type: classic_conditions
+            noDataState: OK
+            execErrState: Error
+            for: 15m
+            annotations:
+              summary: "Swap above 50% used on {{ $labels.instance }}"
+              description: "Memory pressure: swap in use for 15m"
+            labels:
+              severity: warning
+            isPaused: false
+
+          - uid: vps-table-bloat
+            title: VPS PostgreSQL table bloat
+            condition: C
+            data:
+              - refId: A
+                relativeTimeRange:
+                  from: 300
+                  to: 0
+                datasourceUid: prometheus
+                model:
+                  expr: 'pg_vps_tables_n_dead_tup{job="vps-postgres"} / clamp_min(pg_vps_tables_n_dead_tup{job="vps-postgres"} + pg_vps_tables_n_live_tup{job="vps-postgres"}, 1) > 0.2 and pg_vps_tables_n_dead_tup{job="vps-postgres"} > 100000'
+                  refId: A
+              - refId: C
+                relativeTimeRange:
+                  from: 0
+                  to: 0
+                datasourceUid: __expr__
+                model:
+                  conditions:
+                    - evaluator:
+                        params: [0]
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params: [A]
+                      reducer:
+                        type: last
+                  refId: C
+                  type: classic_conditions
+            noDataState: OK
+            execErrState: Error
+            for: 1h
+            annotations:
+              summary: "Table bloat on {{ $labels.datname }}.{{ $labels.relname }}"
+              description: "Dead tuples above 20% and over 100000 for 1h; check autovacuum"
+            labels:
+              severity: warning
+            isPaused: false
