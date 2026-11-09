@@ -376,3 +376,243 @@ data:
               severity: critical
             isPaused: false
 
+
+          - uid: vps-memory-high
+            title: VPS Memory Above 90%
+            condition: C
+            data:
+              - refId: A
+                relativeTimeRange:
+                  from: 300
+                  to: 0
+                datasourceUid: prometheus
+                model:
+                  expr: '(1 - node_memory_MemAvailable_bytes{job="vps-node"} / node_memory_MemTotal_bytes{job="vps-node"}) * 100 > 90'
+                  refId: A
+              - refId: C
+                relativeTimeRange:
+                  from: 0
+                  to: 0
+                datasourceUid: __expr__
+                model:
+                  conditions:
+                    - evaluator:
+                        params: [0]
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params: [A]
+                      reducer:
+                        type: last
+                  refId: C
+                  type: classic_conditions
+            noDataState: OK
+            execErrState: Error
+            for: 10m
+            annotations:
+              summary: "Memory used above 90% on {{ $labels.instance }}"
+              description: "MemAvailable below 10% of total for 10m"
+            labels:
+              severity: warning
+            isPaused: false
+
+          - uid: vps-disk-predicted-full
+            title: VPS Disk Predicted Full Within 7 Days
+            condition: C
+            data:
+              - refId: A
+                relativeTimeRange:
+                  from: 300
+                  to: 0
+                datasourceUid: prometheus
+                model:
+                  expr: 'predict_linear(node_filesystem_avail_bytes{job="vps-node",mountpoint=~"/psqldb|/psqldb-backup"}[24h], 7 * 86400) < 0'
+                  refId: A
+              - refId: C
+                relativeTimeRange:
+                  from: 0
+                  to: 0
+                datasourceUid: __expr__
+                model:
+                  conditions:
+                    - evaluator:
+                        params: [0]
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params: [A]
+                      reducer:
+                        type: last
+                  refId: C
+                  type: classic_conditions
+            noDataState: OK
+            execErrState: Error
+            for: 30m
+            annotations:
+              summary: "{{ $labels.mountpoint }} on {{ $labels.instance }} predicted full within 7 days"
+              description: "Linear projection of the last 24h free space reaches zero within 7 days"
+            labels:
+              severity: warning
+            isPaused: false
+
+          - uid: vps-iowait-high
+            title: VPS CPU iowait Above 30%
+            condition: C
+            data:
+              - refId: A
+                relativeTimeRange:
+                  from: 300
+                  to: 0
+                datasourceUid: prometheus
+                model:
+                  expr: '100 * avg by (instance) (rate(node_cpu_seconds_total{job="vps-node",mode="iowait"}[5m])) > 30'
+                  refId: A
+              - refId: C
+                relativeTimeRange:
+                  from: 0
+                  to: 0
+                datasourceUid: __expr__
+                model:
+                  conditions:
+                    - evaluator:
+                        params: [0]
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params: [A]
+                      reducer:
+                        type: last
+                  refId: C
+                  type: classic_conditions
+            noDataState: OK
+            execErrState: Error
+            for: 15m
+            annotations:
+              summary: "iowait above 30% on {{ $labels.instance }}"
+              description: "Disk is the bottleneck; check backups, checkpoints, heavy queries"
+            labels:
+              severity: warning
+            isPaused: false
+
+          - uid: vps-postgres-restarted
+            title: VPS PostgreSQL Restarted
+            condition: C
+            data:
+              - refId: A
+                relativeTimeRange:
+                  from: 300
+                  to: 0
+                datasourceUid: prometheus
+                model:
+                  expr: 'time() - pg_vps_postmaster_start_time_seconds{job="vps-postgres"} < 600'
+                  refId: A
+              - refId: C
+                relativeTimeRange:
+                  from: 0
+                  to: 0
+                datasourceUid: __expr__
+                model:
+                  conditions:
+                    - evaluator:
+                        params: [0]
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params: [A]
+                      reducer:
+                        type: last
+                  refId: C
+                  type: classic_conditions
+            noDataState: OK
+            execErrState: Error
+            for: 0s
+            annotations:
+              summary: "PostgreSQL on {{ $labels.instance }} restarted less than 10 minutes ago"
+              description: "Postmaster uptime under 10 minutes (planned restart or crash)"
+            labels:
+              severity: info
+            isPaused: false
+
+          - uid: vps-exporter-scrape-error
+            title: VPS postgres_exporter Scrape Error
+            condition: C
+            data:
+              - refId: A
+                relativeTimeRange:
+                  from: 300
+                  to: 0
+                datasourceUid: prometheus
+                model:
+                  expr: 'pg_exporter_last_scrape_error{job="vps-postgres"} == 1'
+                  refId: A
+              - refId: C
+                relativeTimeRange:
+                  from: 0
+                  to: 0
+                datasourceUid: __expr__
+                model:
+                  conditions:
+                    - evaluator:
+                        params: [0]
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params: [A]
+                      reducer:
+                        type: last
+                  refId: C
+                  type: classic_conditions
+            noDataState: OK
+            execErrState: Error
+            for: 15m
+            annotations:
+              summary: "postgres_exporter on {{ $labels.instance }} reports scrape errors"
+              description: "pg_exporter_last_scrape_error==1 for 15m: a collector or custom query fails (journalctl -u prometheus-postgres-exporter)"
+            labels:
+              severity: warning
+            isPaused: false
+
+          - uid: vps-swap-high
+            title: VPS Swap Above 50%
+            condition: C
+            data:
+              - refId: A
+                relativeTimeRange:
+                  from: 300
+                  to: 0
+                datasourceUid: prometheus
+                model:
+                  expr: '(1 - node_memory_SwapFree_bytes{job="vps-node"} / node_memory_SwapTotal_bytes{job="vps-node"}) * 100 > 50 and node_memory_SwapTotal_bytes{job="vps-node"} > 0'
+                  refId: A
+              - refId: C
+                relativeTimeRange:
+                  from: 0
+                  to: 0
+                datasourceUid: __expr__
+                model:
+                  conditions:
+                    - evaluator:
+                        params: [0]
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params: [A]
+                      reducer:
+                        type: last
+                  refId: C
+                  type: classic_conditions
+            noDataState: OK
+            execErrState: Error
+            for: 15m
+            annotations:
+              summary: "Swap above 50% used on {{ $labels.instance }}"
+              description: "Memory pressure: swap in use for 15m"
+            labels:
+              severity: warning
+            isPaused: false
