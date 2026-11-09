@@ -17,7 +17,7 @@ data:
         "vps"
       ],
       "schemaVersion": 39,
-      "version": 3,
+      "version": 4,
       "editable": true,
       "timezone": "browser",
       "refresh": "1m",
@@ -270,7 +270,20 @@ data:
           ],
           "fieldConfig": {
             "defaults": {
-              "unit": "s"
+              "unit": "s",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "red",
+                    "value": null
+                  },
+                  {
+                    "color": "green",
+                    "value": 600
+                  }
+                ]
+              }
             },
             "overrides": []
           },
@@ -1084,7 +1097,11 @@ data:
           "fieldConfig": {
             "defaults": {
               "unit": "bytes",
-              "min": 0
+              "min": 0,
+              "color": {
+                "mode": "fixed",
+                "fixedColor": "blue"
+              }
             },
             "overrides": []
           },
@@ -1131,7 +1148,24 @@ data:
           "fieldConfig": {
             "defaults": {
               "unit": "percentunit",
-              "min": 0
+              "min": 0,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "orange",
+                    "value": 0.1
+                  },
+                  {
+                    "color": "red",
+                    "value": 0.2
+                  }
+                ]
+              }
             },
             "overrides": []
           },
@@ -1814,7 +1848,20 @@ data:
           ],
           "fieldConfig": {
             "defaults": {
-              "unit": "s"
+              "unit": "s",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "orange",
+                    "value": null
+                  },
+                  {
+                    "color": "green",
+                    "value": 600
+                  }
+                ]
+              }
             },
             "overrides": []
           },
@@ -1992,7 +2039,24 @@ data:
           ],
           "fieldConfig": {
             "defaults": {
-              "unit": "s"
+              "unit": "s",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "orange",
+                    "value": 1800
+                  },
+                  {
+                    "color": "red",
+                    "value": 3600
+                  }
+                ]
+              }
             },
             "overrides": []
           },
