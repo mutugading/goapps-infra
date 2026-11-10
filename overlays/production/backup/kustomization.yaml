@@ -3,7 +3,6 @@ kind: Kustomization
 
 # Production Environment Backup Overlay
 # Backup paths:
-#   - PostgreSQL: /goapps-backup/postgres
 #   - MinIO: /goapps-backup/minio (via /mnt/goapps-backup)
 
 namespace: database
@@ -12,79 +11,6 @@ resources:
   - ../../../base/backup
 
 patches:
-  # ===== PostgreSQL Backup Patches =====
-  # Patch backup path for production VPS - Morning backup
-  - target:
-      kind: CronJob
-      name: postgres-backup-morning
-    patch: |-
-      - op: replace
-        path: /spec/jobTemplate/spec/template/spec/containers/0/env/0/value
-        value: "production"
-      # Production keeps PostgreSQL dumps on the dedicated backup disk
-      # (/goapps-backup, sdb) + Backblaze B2 only. Blanking MINIO_ENDPOINT
-      # makes backup.sh skip both the MinIO upload and the MinIO prune: the
-      # postgres-backups bucket lived on the ROOT disk via the MinIO PVC and
-      # its ~24G pushed the node into DiskPressure on 2026-10-08, evicting
-      # ingress-nginx and taking the whole site down. `test` guards the index.
-      - op: test
-        path: /spec/jobTemplate/spec/template/spec/containers/0/env/2/name
-        value: "MINIO_ENDPOINT"
-      - op: replace
-        path: /spec/jobTemplate/spec/template/spec/containers/0/env/2/value
-        value: ""
-      - op: replace
-        path: /spec/jobTemplate/spec/template/spec/volumes/0/hostPath/path
-        value: "/goapps-backup/postgres"
-
-  # Patch backup path for production VPS - Afternoon backup
-  - target:
-      kind: CronJob
-      name: postgres-backup-afternoon
-    patch: |-
-      - op: replace
-        path: /spec/jobTemplate/spec/template/spec/containers/0/env/0/value
-        value: "production"
-      # Production keeps PostgreSQL dumps on the dedicated backup disk
-      # (/goapps-backup, sdb) + Backblaze B2 only. Blanking MINIO_ENDPOINT
-      # makes backup.sh skip both the MinIO upload and the MinIO prune: the
-      # postgres-backups bucket lived on the ROOT disk via the MinIO PVC and
-      # its ~24G pushed the node into DiskPressure on 2026-10-08, evicting
-      # ingress-nginx and taking the whole site down. `test` guards the index.
-      - op: test
-        path: /spec/jobTemplate/spec/template/spec/containers/0/env/2/name
-        value: "MINIO_ENDPOINT"
-      - op: replace
-        path: /spec/jobTemplate/spec/template/spec/containers/0/env/2/value
-        value: ""
-      - op: replace
-        path: /spec/jobTemplate/spec/template/spec/volumes/0/hostPath/path
-        value: "/goapps-backup/postgres"
-
-  # Patch backup path for production VPS - Night backup
-  - target:
-      kind: CronJob
-      name: postgres-backup-night
-    patch: |-
-      - op: replace
-        path: /spec/jobTemplate/spec/template/spec/containers/0/env/0/value
-        value: "production"
-      # Production keeps PostgreSQL dumps on the dedicated backup disk
-      # (/goapps-backup, sdb) + Backblaze B2 only. Blanking MINIO_ENDPOINT
-      # makes backup.sh skip both the MinIO upload and the MinIO prune: the
-      # postgres-backups bucket lived on the ROOT disk via the MinIO PVC and
-      # its ~24G pushed the node into DiskPressure on 2026-10-08, evicting
-      # ingress-nginx and taking the whole site down. `test` guards the index.
-      - op: test
-        path: /spec/jobTemplate/spec/template/spec/containers/0/env/2/name
-        value: "MINIO_ENDPOINT"
-      - op: replace
-        path: /spec/jobTemplate/spec/template/spec/containers/0/env/2/value
-        value: ""
-      - op: replace
-        path: /spec/jobTemplate/spec/template/spec/volumes/0/hostPath/path
-        value: "/goapps-backup/postgres"
-
   # ===== MinIO Backup Patches =====
   # Patch MinIO backup for production environment
   # Note: MinIO backup uses /mnt/goapps-backup which is the base config (no change needed)

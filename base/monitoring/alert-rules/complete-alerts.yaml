@@ -582,51 +582,8 @@ data:
         folder: Database
         interval: 1m
         rules:
-          - uid: postgres-backup-failed
-            title: PostgreSQL Backup Failed
-            condition: C
-            data:
-              - refId: A
-                relativeTimeRange:
-                  from: 3600
-                  to: 0
-                datasourceUid: prometheus
-                model:
-                  expr: kube_job_status_failed{namespace="database",job_name=~"postgres-backup.*"} > 0
-                  refId: A
-              - refId: B
-                datasourceUid: __expr__
-                model:
-                  type: reduce
-                  expression: A
-                  reducer: last
-                  refId: B
-              - refId: C
-                datasourceUid: __expr__
-                model:
-                  type: threshold
-                  expression: B
-                  conditions:
-                    - evaluator:
-                        params: [0]
-                        type: gt
-                  refId: C
-            noDataState: OK
-            execErrState: Error
-            for: 5m
-            annotations:
-              summary: "🔴 PostgreSQL backup job FAILED"
-              description: "A scheduled backup job has failed"
-            labels:
-              severity: critical
-            isPaused: false
-
-          # A dedicated rule rather than widening postgres-backup-failed's regex:
-          # every other rule in this file is one concern per uid with its own
-          # summary text, and that rule's title ("PostgreSQL Backup Failed") and
-          # uid are frozen -- renaming a uid orphans the rule in Grafana. Widening
-          # the regex would have emailed "PostgreSQL backup job FAILED" for a MinIO
-          # job.
+          # One concern per uid with its own summary text (the former
+          # postgres-backup-failed rule was removed with the in-cluster Postgres).
           # LIMITATION: the minio-backup-to-disk retention step swallows its own
           # errors (`find ... -delete 2>/dev/null || true`), so the job exits 0 and
           # kube_job_status_failed stays at 0 even while retention is broken. That

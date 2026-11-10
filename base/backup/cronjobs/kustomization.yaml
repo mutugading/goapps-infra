@@ -4,18 +4,8 @@ kind: Kustomization
 namespace: database
 
 resources:
-  - postgres-backup.yaml
   - minio-backup.yaml
 
-# minio-ilm-setup.yaml is DELIBERATELY NOT listed here. It is a `kind: Job`
-# with ttlSecondsAfterFinished: 300, so under the staging backup Application
-# (automated prune + selfHeal) the TTL controller deletes it 5 minutes after
-# completion, ArgoCD sees the resource missing and recreates it -- an endless
-# re-run loop. `mc ilm rule add` is also not idempotent (each run appends
-# another expiry rule to the bucket). Apply it by hand, once per cluster, if
-# bucket-side expiry is wanted:
-#   kubectl apply -f base/backup/cronjobs/minio-ilm-setup.yaml
-#   kubectl delete job minio-ilm-setup -n database   # after it completes
-# Note it is NOT a fix for the disk-fill incident: ILM prunes the MinIO
-# bucket, which postgres-backup.yaml already prunes at the same 168h window.
-# The disk-side prune lives in minio-backup.yaml.
+# PostgreSQL backups run on the VPS (systemd pg-backup.timer), not here.
+# The old postgres-backups bucket and its ILM Job (minio-ilm-setup.yaml)
+# were removed together with the in-cluster Postgres.
