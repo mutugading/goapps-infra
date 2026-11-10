@@ -1208,7 +1208,7 @@ Each service gets its own database `<svc>_db` on the VPS PostgreSQL (goapps-back
 6. Monitoring: follow the "new service DB" checklist in `docs/runbooks/postgres-vps-monitoring.md`.
 7. Verify the migration afterwards as `<svc>_ro` (or the owner) from the LAN with `psql`, e.g. `SELECT version, dirty FROM schema_migrations_<svc>;`.
 
-A `new-service-db.sh <svc>` script that automates steps 1-4 is **planned (P8b)**; until then do them by hand. Provisioning SQL lives in the goapps workspace `docs/migration-postgres/v2/sql/`.
+Steps 1-2 and the VPS part of step 6 are automated by `scripts/postgres/new-service-db.sh <svc> --target staging|production` (run on the VPS; dry-run unless `--apply`; see `scripts/postgres/README.md`). It prints the step 3-4 follow-ups (secrets, `pgbouncer-vps` entries, dashboard/alert regexes). CI job `db-guard` (`scripts/ci/check-db-overlays.sh`) fails a PR whose overlay points at the wrong host, DB, secret or env IP.
 
 ### Step 6: Add to Sync Workflow
 
