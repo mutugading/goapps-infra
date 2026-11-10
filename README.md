@@ -2,6 +2,8 @@
 
 Infrastructure as Code (IaC) for **GoApps Microservices Platform** - managing Kubernetes deployments, monitoring, backups, and GitOps.
 
+> **Current architecture (2026-11):** PostgreSQL no longer runs in the cluster. It runs on a VPS behind `pgbouncer-vps`; the old `postgres` StatefulSet, `pgbouncer`, `postgres-exporter` and `postgres-backup-*` CronJobs were removed from git (P7). Backups run on the VPS via systemd `pg-backup.timer`. See `docs/db-v2-cutover.md` and `docs/runbooks/postgres-vps-monitoring.md`. Sections below that mention `postgres-0`, in-cluster pgbouncer/exporter or `postgres-backup-*` are historical and stale.
+
 ---
 
 ## 📋 Table of Contents

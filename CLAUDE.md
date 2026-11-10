@@ -4,6 +4,8 @@
 > Last updated 2026-10-12: backup destinations, MinIO image source, ArgoCD infra sync policy, disk-pressure incident (see §10, §9, §17).
 > Read this before making any changes.
 
+> **Current architecture (2026-11):** PostgreSQL no longer runs in the cluster. It runs on a VPS behind `pgbouncer-vps`; the old `postgres` StatefulSet, `pgbouncer`, `postgres-exporter` and `postgres-backup-*` CronJobs were removed from git (P7). Backups run on the VPS via systemd `pg-backup.timer`. See `docs/db-v2-cutover.md` and `docs/runbooks/postgres-vps-monitoring.md`. Sections below that mention `postgres-0`, in-cluster pgbouncer/exporter or `postgres-backup-*` are historical and stale.
+
 ---
 
 ## Agent Skills (read first — use them without being asked)
