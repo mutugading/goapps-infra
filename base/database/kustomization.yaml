@@ -4,9 +4,6 @@ kind: Kustomization
 namespace: database
 
 resources:
-  - postgres
-  - pgbouncer
-  - exporter
   - redis
   - rabbitmq
   - oracle
