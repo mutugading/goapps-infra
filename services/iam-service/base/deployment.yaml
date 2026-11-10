@@ -44,23 +44,23 @@ spec:
                   fieldPath: metadata.namespace
             # Database config - matches Go app config.go bindings
             - name: DATABASE_HOST
-              value: "postgres.database.svc.cluster.local"
+              value: "pgbouncer-vps.database.svc.cluster.local"
             - name: DATABASE_PORT
               value: "5432"
             - name: DATABASE_NAME
-              value: "goapps"
+              value: "iam_db"
             - name: DATABASE_SSLMODE
               value: "disable"
             - name: DATABASE_USER
               valueFrom:
                 secretKeyRef:
-                  name: postgres-secret
-                  key: POSTGRES_USER
+                  name: iam-db-secret
+                  key: APP_USER
             - name: DATABASE_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: postgres-secret
-                  key: POSTGRES_PASSWORD
+                  name: iam-db-secret
+                  key: APP_PASSWORD
             # JWT (shared secrets for SSO token signing/validation)
             - name: JWT_ACCESS_SECRET
               valueFrom:

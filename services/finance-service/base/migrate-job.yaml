@@ -51,17 +51,17 @@ spec:
             - name: DATABASE_USER
               valueFrom:
                 secretKeyRef:
-                  name: postgres-secret
-                  key: POSTGRES_USER
+                  name: finance-db-secret
+                  key: OWNER_USER
             - name: DATABASE_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: postgres-secret
-                  key: POSTGRES_PASSWORD
+                  name: finance-db-secret
+                  key: OWNER_PASSWORD
             # lock_timeout=10s: fail fast instead of queueing behind pg_dump (ACCESS SHARE) forever.
             # `options` is a libpq/lib-pq param; works on direct postgres:5432 only (NOT via PgBouncer).
             - name: DATABASE_URL
-              value: "postgres://$(DATABASE_USER):$(DATABASE_PASSWORD)@postgres.database.svc.cluster.local:5432/goapps?sslmode=disable&x-migrations-table=schema_migrations_finance&options=-c%20lock_timeout%3D10s%20-c%20statement_timeout%3D0"
+              value: "postgres://$(DATABASE_USER):$(DATABASE_PASSWORD)@set-in-overlay.invalid:5432/finance_db?sslmode=require&x-migrations-table=schema_migrations_finance&options=-c%20lock_timeout%3D10s%20-c%20statement_timeout%3D0"
           resources:
             requests:
               memory: "64Mi"

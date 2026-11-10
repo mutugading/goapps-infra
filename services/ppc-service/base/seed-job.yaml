@@ -47,23 +47,24 @@ spec:
                 fieldRef:
                   fieldPath: metadata.namespace
             - name: PPC_DATABASE_HOST
-              value: "postgres.database.svc.cluster.local"
+              # overridden per env (VPS IP) in overlays/*/jobs
+              value: "set-in-overlay.invalid"
             - name: PPC_DATABASE_PORT
               value: "5432"
             - name: PPC_DATABASE_NAME
               value: "ppc_db"
             - name: PPC_DATABASE_SSLMODE
-              value: "disable"
+              value: "require"
             - name: PPC_DATABASE_USER
               valueFrom:
                 secretKeyRef:
-                  name: postgres-secret
-                  key: POSTGRES_USER
+                  name: ppc-db-secret
+                  key: OWNER_USER
             - name: PPC_DATABASE_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: postgres-secret
-                  key: POSTGRES_PASSWORD
+                  name: ppc-db-secret
+                  key: OWNER_PASSWORD
             # Service-to-service token. The seeder's machine-sync path calls
             # finance's internal RPCs, so it needs the same token the
             # Deployment uses (deployment.yaml feeds both env names from this
