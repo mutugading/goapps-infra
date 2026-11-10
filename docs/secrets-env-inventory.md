@@ -44,11 +44,11 @@ Format: `ENV_VAR` ← `secret/KEY`. "both" = staging and production.
 | Env var | Source | Used by |
 |---------|--------|---------|
 | `ORACLE_HOST`, `ORACLE_PORT`, `ORACLE_SERVICE`, `ORACLE_USER`, `ORACLE_PASSWORD` | `oracle-credentials/<same name>` | finance-service, finance-worker, ppc-service (both) |
-| `ORACLE_HRIS_HOST` | `oracle-credentials/ORACLE_HOST` | finance-service (production) |
-| `ORACLE_HRIS_PORT` | `oracle-credentials/ORACLE_PORT` | finance-service (production) |
-| `ORACLE_HRIS_SERVICE` | `oracle-credentials/ORACLE_SERVICE` | finance-service (production) |
-| `ORACLE_HRIS_USER` | `oracle-credentials/ORACLE_MGTHRIS_USER` | finance-service (production) |
-| `ORACLE_HRIS_PASSWORD` | `oracle-credentials/ORACLE_MGTHRIS_PASSWORD` | finance-service (production) |
+| `ORACLE_HRIS_HOST` | `oracle-credentials/ORACLE_HOST` | finance-service (both) |
+| `ORACLE_HRIS_PORT` | `oracle-credentials/ORACLE_PORT` | finance-service (both) |
+| `ORACLE_HRIS_SERVICE` | `oracle-credentials/ORACLE_SERVICE` | finance-service (both) |
+| `ORACLE_HRIS_USER` | `oracle-credentials/ORACLE_MGTHRIS_USER` | finance-service (both) |
+| `ORACLE_HRIS_PASSWORD` | `oracle-credentials/ORACLE_MGTHRIS_PASSWORD` | finance-service (both) |
 
 **HRIS = MGTHRIS.** The HR dashboard ETL (data source `HRIS_ORACLE`) reads `MGTHRIS.VIEW_BI_ATT_DAILY`
 / `VIEW_BI_OT_DAILY` with the MGTHRIS account on the same Oracle instance. finance-service only
@@ -56,7 +56,7 @@ installs the HRIS runner when `ORACLE_HRIS_HOST/SERVICE/USER/PASSWORD` are all s
 `Oracle HRIS not configured (ORACLE_HRIS_*)` at startup and HRIS jobs fail with
 `ETL runner for data source HRIS_ORACLE is not configured or its connection is unavailable`.
 The runner is registered only at startup -- restart the pod after fixing credentials.
-Patch: `services/finance-service/overlays/production/patches/env-oracle-hris.yaml`. Staging has no HRIS env yet.
+Patch: `services/finance-service/overlays/{production,staging}/patches/env-oracle-hris.yaml`.
 
 ### Database
 
