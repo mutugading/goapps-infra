@@ -9,6 +9,8 @@ GoApps uses `golang-migrate` for database migrations. Migrations are run via Kub
 | Finance | `schema_migrations_finance` | `services/finance/migrations/postgres/` |
 | IAM | `schema_migrations_iam` | `services/iam/migrations/postgres/` |
 
+> **Database access.** Postgres runs on the VPS (prod `192.168.0.40`, staging `192.168.0.60`), one DB per service (`finance_db`, `iam_db`, `ppc_db`), and each DB holds its own `schema_migrations_<svc>` table. Below, `<vps-ip>` is the VPS of the environment and `psql` is run from the LAN (`sslmode=require`) as `<svc>_owner`; alternatively on the VPS use `sudo -u postgres psql -d <svc>_db`. Passwords: team password manager `goapps/<env>/postgres/<role>`.
+
 ---
 
 ## How golang-migrate Works
@@ -45,7 +47,7 @@ cd ~/goapps-infra
 ./scripts/<service>-setup.sh <namespace> seed
 
 # 6. Verify
-kubectl exec -it postgres-0 -n database -- psql -U postgres -d goapps -c \
+psql "host=<vps-ip> dbname=<service>_db user=<service>_owner sslmode=require" -c \
   "SELECT version, dirty FROM schema_migrations_<service>;"
 ```
 
@@ -57,7 +59,7 @@ kubectl exec -it postgres-0 -n database -- psql -U postgres -d goapps -c \
 ./scripts/<service>-setup.sh <namespace>    # runs migrate + seed
 
 # 3. Verify all tables exist
-kubectl exec -it postgres-0 -n database -- psql -U postgres -d goapps -c "\dt mst_*"
+psql "host=<vps-ip> dbname=<service>_db user=<service>_owner sslmode=require" -c "\dt mst_*"
 ```
 
 ---
@@ -86,14 +88,14 @@ Common triggers:
 
 ```bash
 # 1. Check the dirty state
-kubectl exec -it postgres-0 -n database -- psql -U postgres -d goapps -c \
+psql "host=<vps-ip> dbname=<service>_db user=<service>_owner sslmode=require" -c \
   "SELECT version, dirty FROM schema_migrations_<service>;"
 
 # 2. Check migration pod logs for the actual error
 kubectl logs -n <namespace> -l job-name=<service>-migrate
 
 # 3. Check if the tables from that version already exist
-kubectl exec -it postgres-0 -n database -- psql -U postgres -d goapps -c \
+psql "host=<vps-ip> dbname=<service>_db user=<service>_owner sslmode=require" -c \
   "\dt auth.*" -- or "\dt mst_*" depending on the migration
 ```
 
@@ -104,7 +106,7 @@ kubectl exec -it postgres-0 -n database -- psql -U postgres -d goapps -c \
 ```bash
 # Manually complete the missing parts of the migration SQL
 # Then set version to the completed version:
-kubectl exec -it postgres-0 -n database -- psql -U postgres -d goapps -c \
+psql "host=<vps-ip> dbname=<service>_db user=<service>_owner sslmode=require" -c \
   "UPDATE schema_migrations_<service> SET version = <N>, dirty = false;"
 ```
 
@@ -117,7 +119,7 @@ This happens when migrations were applied outside of golang-migrate (manual SQL,
 ```bash
 # 1. Verify which migrations are actually applied (see checklist below)
 # 2. Set version to the last VERIFIED applied migration:
-kubectl exec -it postgres-0 -n database -- psql -U postgres -d goapps -c \
+psql "host=<vps-ip> dbname=<service>_db user=<service>_owner sslmode=require" -c \
   "UPDATE schema_migrations_<service> SET version = <last_verified>, dirty = false;"
 
 # 3. Re-run to apply remaining migrations
@@ -131,11 +133,11 @@ golang-migrate expects exactly 1 row. If there are multiple rows (e.g., from man
 
 ```bash
 # Check row count
-kubectl exec -it postgres-0 -n database -- psql -U postgres -d goapps -c \
+psql "host=<vps-ip> dbname=<service>_db user=<service>_owner sslmode=require" -c \
   "SELECT * FROM schema_migrations_<service>;"
 
 # Fix: DELETE all rows, INSERT the correct single row
-kubectl exec -it postgres-0 -n database -- psql -U postgres -d goapps -c \
+psql "host=<vps-ip> dbname=<service>_db user=<service>_owner sslmode=require" -c \
   "DELETE FROM schema_migrations_<service>;
    INSERT INTO schema_migrations_<service> (version, dirty) VALUES (<last_applied>, false);"
 ```
@@ -145,7 +147,7 @@ kubectl exec -it postgres-0 -n database -- psql -U postgres -d goapps -c \
 ```bash
 # 1. Fix the underlying issue (e.g., drop partially created objects)
 # 2. Reset dirty flag WITHOUT changing version
-kubectl exec -it postgres-0 -n database -- psql -U postgres -d goapps -c \
+psql "host=<vps-ip> dbname=<service>_db user=<service>_owner sslmode=require" -c \
   "UPDATE schema_migrations_<service> SET dirty = false;"
 # 3. Re-run migration
 ```
@@ -222,7 +224,7 @@ The seed job tries to INSERT into a table that was never created. This happens w
 
 ```bash
 # Example: CMS tables missing (migration 012)
-kubectl exec -it postgres-0 -n database -- psql -U postgres -d goapps
+psql "host=<vps-ip> dbname=iam_db user=iam_owner sslmode=require"
 # Paste SQL from 000012_create_cms_tables.up.sql
 
 # Then re-run seed
@@ -240,7 +242,7 @@ kubectl delete job iam-seed -n <namespace> --ignore-not-found
 
 ```bash
 # Connect to psql
-kubectl exec -it postgres-0 -n database -- psql -U postgres -d goapps
+psql "host=<vps-ip> dbname=iam_db user=iam_owner sslmode=require"
 ```
 
 | Migration | What to check | SQL to verify |
@@ -272,7 +274,7 @@ kubectl exec -it postgres-0 -n database -- psql -U postgres -d goapps
 ### Quick Full Check (IAM)
 
 ```bash
-kubectl exec -it postgres-0 -n database -- psql -U postgres -d goapps -c "
+psql "host=<vps-ip> dbname=iam_db user=iam_owner sslmode=require" -c "
   SELECT '001-org' as migration, EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name = 'mst_company') as applied
   UNION ALL SELECT '002-user', EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name = 'mst_user')
   UNION ALL SELECT '003-auth', EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name = 'mst_auth_token')
@@ -294,10 +296,11 @@ kubectl exec -it postgres-0 -n database -- psql -U postgres -d goapps -c "
 
 ```bash
 # Both services at once
-kubectl exec -it postgres-0 -n database -- psql -U postgres -d goapps -c \
-  "SELECT 'finance' as service, version, dirty FROM schema_migrations_finance
-   UNION ALL
-   SELECT 'iam', version, dirty FROM schema_migrations_iam;"
+# Each service has its own DB, so query each one
+psql "host=<vps-ip> dbname=finance_db user=finance_owner sslmode=require" -c \
+  "SELECT version, dirty FROM schema_migrations_finance;"
+psql "host=<vps-ip> dbname=iam_db user=iam_owner sslmode=require" -c \
+  "SELECT version, dirty FROM schema_migrations_iam;"
 ```
 
 ---
@@ -319,7 +322,7 @@ kubectl exec -it postgres-0 -n database -- psql -U postgres -d goapps -c \
 2. **After merge + deploy, always run migration if new migration files were added**
 3. **Check version before and after** running migrations:
    ```bash
-   kubectl exec -it postgres-0 -n database -- psql -U postgres -d goapps -c \
+   psql "host=<vps-ip> dbname=<service>_db user=<service>_owner sslmode=require" -c \
      "SELECT version, dirty FROM schema_migrations_<service>;"
    ```
 4. **If you need to manually fix version**, NEVER guess — use the [verification checklist](#verifying-which-migrations-are-actually-applied) to confirm which migrations are actually applied

@@ -17,7 +17,7 @@ Panduan ini akan memandu Anda untuk:
 Pastikan Anda memiliki:
 - SSH access ke VPS staging dan production
 - SSL certificates (`ssl-bundle.crt`, `ssl-bundle.key`)
-- Kredensial Oracle, PostgreSQL, MinIO, dll.
+- Kredensial Oracle, MinIO, dll. (PostgreSQL berjalan di VPS khusus, bukan di VPS K3s ini; password role dari password manager)
 
 ---
 
@@ -83,7 +83,6 @@ df -h /staging-goapps-backup
 # Expected: /dev/sdb1  59G  24K  56G  1% /staging-goapps-backup
 
 # Buat subdirektori backup
-sudo mkdir -p /staging-goapps-backup/postgres
 sudo mkdir -p /staging-goapps-backup/minio
 sudo chown -R $USER:$USER /staging-goapps-backup
 ```
@@ -96,7 +95,6 @@ df -h /goapps-backup
 # Expected: /dev/sdb1  59G  24K  56G  1% /goapps-backup
 
 # Buat subdirektori backup
-sudo mkdir -p /goapps-backup/postgres
 sudo mkdir -p /goapps-backup/minio
 sudo chown -R $USER:$USER /goapps-backup
 ```
@@ -162,12 +160,7 @@ kubectl get ns
 
 ### PostgreSQL Secret
 
-```bash
-kubectl create secret generic postgres-secret -n database \
-  --from-literal=POSTGRES_USER=goapps_admin \
-  --from-literal=POSTGRES_PASSWORD='<PASSWORD_ANDA>' \
-  --from-literal=POSTGRES_DB=goapps
-```
+Tidak ada `postgres-secret` lagi. PostgreSQL berjalan di VPS khusus (prod `192.168.0.40`, staging `192.168.0.60`), bukan di VPS K3s ini, sehingga reset K3s tidak menyentuh data database. Yang perlu dibuat setelah namespace siap: `<svc>-db-secret` per service (`iam-db-secret`, `finance-db-secret`, `ppc-db-secret`) di namespace aplikasi (keys `APP_USER`/`APP_PASSWORD` untuk runtime dan `OWNER_USER`/`OWNER_PASSWORD` untuk migrate/seed) dan `pgbouncer-vps-userlist` di namespace `database` (lihat `docs/secrets-env-inventory.md`).
 
 ### MinIO Secret
 
@@ -481,29 +474,19 @@ MinIO defaultnya HTTP. Untuk enable HTTPS di port 30090:
    ```
 ```
 
-### Step 9.1: Create PostgreSQL Role untuk Exporter
+### Step 9.1: Monitoring PostgreSQL
 
-> **PENTING:** Tanpa role `postgres`, monitoring exporter tidak bisa collect metrics!
-
-```bash
-# STAGING VPS - ganti <PASSWORD> dengan password postgres secret Anda
-kubectl exec -it postgres-0 -n database -- psql -U stgapps -d goapps -c \
-  "CREATE ROLE postgres LOGIN SUPERUSER PASSWORD '<POSTGRES_PASSWORD>';"
-
-# PRODUCTION VPS - ganti <PASSWORD> dengan password postgres secret Anda
-kubectl exec -it postgres-0 -n database -- psql -U goapps -d goapps -c \
-  "CREATE ROLE postgres LOGIN SUPERUSER PASSWORD '<POSTGRES_PASSWORD>';"
-```
+Tidak ada langkah role exporter di cluster lagi. `postgres_exporter` dan `node-exporter` berjalan di VPS Postgres dan di-scrape lewat `base/monitoring/vps-postgres/`. Lihat `docs/runbooks/postgres-vps-monitoring.md`.
 
 ### Verifikasi Database Layer
 
 ```bash
-# PostgreSQL
-kubectl get pods -n database -l app=postgres
-kubectl logs -n database statefulset/postgres --tail=20
+# PostgreSQL (di VPS Postgres, bukan di K3s)
+#   ssh hom@192.168.0.60   # staging (prod: 192.168.0.40)
+#   systemctl status postgresql
 
 # PgBouncer
-kubectl get pods -n database -l app=pgbouncer
+kubectl get pods -n database -l app=pgbouncer-vps
 
 # Redis
 kubectl get pods -n database -l app=redis
@@ -713,7 +696,8 @@ kubectl get ingress -A
 ### Test PostgreSQL
 
 ```bash
-kubectl exec -it postgres-0 -n database -- psql -U goapps_admin -d goapps -c "SELECT 1"
+kubectl run test-pg --rm -it --image=postgres:18-alpine -- \
+  psql -h pgbouncer-vps.database -U <svc>_app -d <svc>_db -c "SELECT 1"
 ```
 
 ### Test Redis
@@ -788,7 +772,6 @@ Ulangi langkah yang sama dengan perbedaan:
 ssh deploy@goapps.mutugading.com
 
 # Backup directory production
-sudo mkdir -p /goapps-backup/postgres
 sudo mkdir -p /goapps-backup/minio
 
 # Apply production ingress
@@ -816,7 +799,7 @@ kubectl logs <POD_NAME> -n <NAMESPACE>
 kubectl get svc -n database
 # Test dari dalam cluster
 kubectl run test-pg --rm -it --image=postgres:18-alpine -- \
-  psql -h postgres.database -U goapps_admin -d goapps
+  psql -h pgbouncer-vps.database -U <svc>_app -d <svc>_db
 ```
 
 ## K3s tidak start setelah reboot
