@@ -32,8 +32,9 @@ Guidelines and rules for all developers working with `goapps-infra`.
 git add secrets/production-credentials.yaml
 
 # ✅ CORRECT - Create secrets manually in cluster
-kubectl create secret generic postgres-secret -n database \
-  --from-literal=POSTGRES_PASSWORD='<password>'
+kubectl create secret generic finance-db-secret -n goapps-staging \
+  --from-literal=APP_USER='finance_app' \
+  --from-literal=APP_PASSWORD='<password>'
 ```
 
 ### 2. Always Test in Staging First
@@ -87,14 +88,14 @@ Consistent naming is essential for:
 |----------|---------|---------|
 | Namespace | `<purpose>` or `<app>-<env>` | `database`, `monitoring`, `goapps-staging` |
 | Deployment | `<service-name>` | `finance-service`, `frontend` |
-| StatefulSet | `<app-name>` | `postgres`, `rabbitmq` |
-| Service | `<deployment-name>` | `finance-service`, `postgres` |
-| ConfigMap | `<app>-config` | `postgres-config`, `grafana-config` |
-| Secret | `<app>-secret` | `postgres-secret`, `minio-secret` |
+| StatefulSet | `<app-name>` | `redis`, `rabbitmq` |
+| Service | `<deployment-name>` | `finance-service`, `pgbouncer-vps` |
+| ConfigMap | `<app>-config` | `rabbitmq-config`, `grafana-config` |
+| Secret | `<app>-secret` | `finance-db-secret`, `minio-secret` |
 | HPA | `<deployment>-hpa` | `finance-service-hpa` |
-| VPA | `<deployment>-vpa` | `postgres-vpa` |
-| PVC | `<app>-data` | `postgres-data`, `grafana-data` |
-| CronJob | `<purpose>-<schedule>` | `postgres-backup-morning` |
+| VPA | `<deployment>-vpa` | `finance-service-vpa` |
+| PVC | `<app>-data` | `rabbitmq-data`, `grafana-data` |
+| CronJob | `<purpose>-<schedule>` | `minio-backup-to-disk` |
 | Ingress | `<app>-ingress` | `grafana-ingress`, `argocd-ingress` |
 | ServiceMonitor | `<service>-monitor` | `finance-service-monitor` |
 
@@ -223,19 +224,18 @@ services/<service-name>/
 ### Base Kustomization
 
 ```yaml
-# base/database/postgres/kustomization.yaml
+# base/database/redis/kustomization.yaml
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 namespace: database
 
 resources:
-  - statefulset.yaml
+  - deployment.yaml
   - service.yaml
-  - configmap.yaml
 
 commonLabels:
-  app.kubernetes.io/name: postgres
+  app.kubernetes.io/name: redis
   app.kubernetes.io/part-of: goapps
 ```
 
@@ -345,23 +345,23 @@ spec:
                 fieldRef:
                   fieldPath: metadata.namespace
             - name: DATABASE_HOST
-              value: "postgres.database.svc.cluster.local"
+              value: "pgbouncer-vps.database.svc.cluster.local"
             - name: DATABASE_PORT
               value: "5432"
             - name: DATABASE_NAME
-              value: "goapps"
+              value: "my_service_db"
             - name: DATABASE_SSLMODE
-              value: "disable"
+              value: "disable"   # in-cluster hop; pgbouncer-vps -> VPS uses TLS (server_tls_sslmode=require)
             - name: DATABASE_USER
               valueFrom:
                 secretKeyRef:
-                  name: postgres-secret
-                  key: POSTGRES_USER
+                  name: my-service-db-secret
+                  key: APP_USER
             - name: DATABASE_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: postgres-secret
-                  key: POSTGRES_PASSWORD
+                  name: my-service-db-secret
+                  key: APP_PASSWORD
             - name: REDIS_HOST
               value: "redis.database.svc.cluster.local"
             - name: REDIS_PORT
@@ -519,15 +519,9 @@ spec:
       - CreateNamespace=true
 ```
 
-### Step 5: Add Database Schema (if needed)
+### Step 5: Add Database (if needed)
 
-Edit `base/database/postgres/configmap.yaml`:
-
-```sql
--- Add to init-schemas.sql
-CREATE SCHEMA IF NOT EXISTS my_service;
-GRANT ALL PRIVILEGES ON SCHEMA my_service TO postgres;
-```
+See [Adding a New Service Database](#adding-a-new-service-database): roles, `<svc>_db`, `<svc>-db-secret` and pgbouncer-vps entry (the Postgres server is on the VPS, not in this repo).
 
 ### Step 6: Commit and Push
 
@@ -543,68 +537,65 @@ git push origin infra/add-my-service
 
 ## Database Management
 
+PostgreSQL 18.4 runs **outside Kubernetes** on VPS hosts: prod `192.168.0.40`, staging `192.168.0.60`
+(TLS, `scram-sha-256`, `pg_hba` only from LAN `192.168.0.0/24`). There is no in-cluster Postgres
+manifest in this repo (`base/database/` holds only redis, rabbitmq, oracle).
+
+### One Database per Service
+
+Each service owns its database (backend ADR `docs/adr/0001-one-database-per-service.md`):
+`iam_db`, `finance_db`, `ppc_db`. Roles per service: `<svc>_owner` (migrations/seeds only, direct to the VPS),
+`<svc>_app` (runtime, DML only, via PgBouncer), `<svc>_ro` (read-only). Schema `public` only; migration table
+`schema_migrations_<svc>`; no cross-service SQL (use gRPC). Never use a superuser from apps.
+
 ### PostgreSQL Configuration
 
-Values below are the **actual** contents of `base/database/postgres/configmap.yaml`.
-(This table previously listed 150 / 256MB / 128MB, which had drifted from the manifest.)
+`postgresql.conf` settings live on the VPS in `/etc/postgresql/18/main/conf.d/90-goapps.conf`. They are
+changed by the infra team via ssh + `systemctl reload postgresql`, **not** through a ConfigMap or this repo.
 
-| Setting | Value | Reason |
-|---------|-------|--------|
-| max_connections | 200 | PgBouncer pooling + direct; raised for the Phase C calc engine |
-| shared_buffers | 1GB | Shared page cache |
-| effective_cache_size | 3GB | Planner hint |
-| work_mem | 16MB | Per-operation memory |
-| maintenance_work_mem | 512MB | For VACUUM, CREATE INDEX |
-| wal_buffers | 16MB | WAL staging |
-| max_wal_size | 1GB | Checkpoint spacing |
+### Connection via pgbouncer-vps
 
-### Adding New Schema
-
-> **Almost never needed.** All application tables live in the `public` schema; the schemas
-> created by `init-schemas.sql` (`export`, `auth`, `hr`, `finance`) are empty. `init-schemas.sql`
-> also only executes on **first initdb** of an empty data directory, so editing it has no effect
-> on an existing volume. Add tables via a normal migration in `goapps-backend` instead.
-
-1. Edit `base/database/postgres/configmap.yaml`
-2. Add CREATE SCHEMA statement to `init-schemas.sql`
-
-```sql
-CREATE SCHEMA IF NOT EXISTS new_schema;
-GRANT ALL PRIVILEGES ON SCHEMA new_schema TO postgres;
-```
-
-3. Re-deploy PostgreSQL pod (if needed, data is preserved)
-
-```bash
-kubectl rollout restart statefulset/postgres -n database
-```
-
-### Connection via PgBouncer
-
-All services MUST connect through PgBouncer:
+Runtime connections MUST go through `pgbouncer-vps` (Deployment + Service in namespace `database`,
+transaction pooling, manifests in `base/pgbouncer-vps/` + `overlays/<env>/pgbouncer-vps/pgbouncer.ini`):
 
 ```yaml
-# ✅ CORRECT
+# ✅ CORRECT - runtime via pgbouncer-vps, per-service app role
 env:
   - name: DATABASE_HOST
-    value: "pgbouncer.database.svc.cluster.local"
+    value: "pgbouncer-vps.database.svc.cluster.local"
   - name: DATABASE_PORT
     value: "5432"
 
-# ❌ WRONG - Direct PostgreSQL connection
+# ❌ WRONG - runtime connection directly to the VPS IP
 env:
   - name: DATABASE_HOST
-    value: "postgres.database.svc.cluster.local"
+    value: "192.168.0.40"
 ```
+
+Pool sizes: edit `overlays/<env>/pgbouncer-vps/pgbouncer.ini` and let ArgoCD sync.
+
+### Adding a New Service Database
+
+1. Create roles (`<svc>_owner`, `<svc>_app`, `<svc>_ro`), the `<svc>_db` database, grants and the `pg_hba` entries on both VPS (infra team). A `new-service-db.sh <svc>` script is **planned** (P8b).
+2. Create secret `<svc>-db-secret` in the app namespace (never in Git) with keys `APP_USER`/`APP_PASSWORD` (runtime `<svc>_app`) and `OWNER_USER`/`OWNER_PASSWORD` (`<svc>_owner`, used by migrate/seed jobs).
+3. Add `<svc>_db` to `[databases]` and the app role to the userlist (`pgbouncer-vps-userlist` secret) for pgbouncer-vps.
+4. Add monitoring for the new DB (see `docs/runbooks/postgres-vps-monitoring.md`).
 
 ### Database Migrations
 
-Migrations are run from services, not from infra repo:
+Migrations are run from services, not from the infra repo. Migrate/seed jobs use the owner role directly
+against the VPS (`sslmode=require`, `x-migrations-table=schema_migrations_<svc>`):
 
 ```bash
 # In goapps-backend/services/finance
 make migrate-up
 ```
+
+### Admin Access
+
+There is no `kubectl exec postgres-0`. Use psql/DataGrip from the LAN (`192.168.0.0/24`) with
+`sslmode=require` to `192.168.0.40|60:5432` as the needed role (passwords in the team password manager
+`goapps/<env>/postgres/<role>`), or on the VPS `sudo -u postgres psql -d <svc>_db`. Read-only queries use `<svc>_ro`.
 
 ---
 
@@ -635,7 +626,7 @@ data:
 
 ### Adding New Alert
 
-1. Edit an existing rule file in `base/monitoring/alert-rules/` — `complete-alerts.yaml` (general), `postgres-alerts.yaml` (database), or `cost-calc-alerts.yaml` (finance-cost-worker only). There is **no `grafana-alerts.yaml`**; earlier revisions of this doc named a file that does not exist. New ConfigMaps must carry the label `grafana_alert: "1"` and be added to `base/monitoring/alert-rules/kustomization.yaml`.
+1. Edit an existing rule file in `base/monitoring/alert-rules/` — `complete-alerts.yaml` (general), `postgres-vps-alerts.yaml` (database), or `cost-calc-alerts.yaml` (finance-cost-worker only). There is **no `grafana-alerts.yaml`**; earlier revisions of this doc named a file that does not exist. New ConfigMaps must carry the label `grafana_alert: "1"` and be added to `base/monitoring/alert-rules/kustomization.yaml`.
    - `grafana-alert-rules.yaml` exists on disk but is **not** in the kustomization and is applied by nothing — do not edit it expecting an effect.
    - `grafana-alertrules-configmap.yaml` is a `deleteRules:` tombstone — do not remove or extend it.
    - Edits here are **additive only**: `base/monitoring/` is under no ArgoCD Application, so nothing reconciles or restores it.
@@ -693,51 +684,35 @@ spec:
 
 ## Backup Management
 
+PostgreSQL backups run **on each VPS via systemd** (not Kubernetes CronJobs):
+
+- `pg-backup.timer` runs 04:00 / 12:00 / 20:00 WIB and calls `/usr/local/sbin/pg-backup`: `pg_dump --format=custom --compress=zstd:3`, one file per DB plus globals, into `/psqldb-backup/postgres/<YYYYMMDD_HHMMSS>/`. Each dump is verified ("VERIFY OK" in the journal). Retention is 7 days (skipped when a run is degraded).
+- `pg-restore-test.timer` runs Sunday 06:00 WIB and calls `/usr/local/sbin/pg-restore-test` (restores the latest dump into a scratch DB; "RESTORE TEST PASSED").
+- Scripts and units live in the goapps workspace `docs/migration-postgres/v2/vps/` (outside this repo).
+- The MinIO backup CronJob (`minio-backup-to-disk`, 03:00 daily, `base/backup/cronjobs/minio-backup.yaml`) is unrelated to Postgres and still exists for MinIO data.
+
 ### Backup Verification Checklist (Weekly)
 
-- [ ] Check CronJob status: `kubectl get cronjobs -n database`
-- [ ] Verify MinIO bucket: `mc ls minio/postgres-backups`
-- [ ] Verify Backblaze B2: Check B2 console
-- [ ] Verify VPS disk backups: `ls -la /mnt/goapps-backup/postgres`
-- [ ] Test restore on staging (monthly)
+Run on each VPS (192.168.0.40 prod, 192.168.0.60 staging):
 
-### Adding New Backup Target
+- [ ] Timers active: `systemctl list-timers 'pg-*'`
+- [ ] Last backup OK: `journalctl -u pg-backup.service -n 50` (look for "VERIFY OK")
+- [ ] Fresh dump set exists: `ls -lt /psqldb-backup/postgres | head`
+- [ ] Last restore test passed: `journalctl -u pg-restore-test.service -n 50` ("RESTORE TEST PASSED")
+- [ ] No backup alerts firing in Grafana (`postgres-vps-alerts.yaml` includes backup age/failure)
 
-Add to `base/backup/cronjobs/postgres-backup.yaml`:
+### Adding a New Database to Backups
 
-```yaml
-# In backup.sh script, add:
-if [ -n "${NEW_BACKUP_ENDPOINT}" ]; then
-  echo "[$(date)] Uploading to new backup target..."
-  mc alias set newbackup https://${NEW_BACKUP_ENDPOINT} ${ACCESS_KEY} ${SECRET_KEY}
-  mc cp "${BACKUP_FILE}" newbackup/${BUCKET}/
-fi
-```
+`pg-backup` dumps each database separately; check that a new `<svc>_db` appears in the latest
+`/psqldb-backup/postgres/<timestamp>/` directory after the next run. Changes to the script itself are made by the infra team in the workspace `docs/migration-postgres/v2/vps/`.
 
 ### Restore Testing
 
-Perform at least once per month on staging:
+Automated weekly by `pg-restore-test.timer`. For a manual drill (infra team, on the VPS, staging first):
 
 ```bash
-# 1. Get latest backup
-BACKUP=$(ls -t /mnt/stgapps-backup/postgres/*.sql.gz | head -1)
-
-# 2. Create test database
-kubectl exec -it postgres-0 -n database -- \
-  psql -U postgres -c "CREATE DATABASE goapps_restore_test"
-
-# 3. Restore
-kubectl exec -it postgres-0 -n database -- bash -c "
-  gunzip -c ${BACKUP} | psql -U postgres -d goapps_restore_test
-"
-
-# 4. Verify
-kubectl exec -it postgres-0 -n database -- \
-  psql -U postgres -d goapps_restore_test -c "SELECT COUNT(*) FROM finance.some_table"
-
-# 5. Cleanup
-kubectl exec -it postgres-0 -n database -- \
-  psql -U postgres -c "DROP DATABASE goapps_restore_test"
+sudo systemctl start pg-restore-test.service
+journalctl -u pg-restore-test.service -n 50   # expect "RESTORE TEST PASSED"
 ```
 
 ---
@@ -823,19 +798,19 @@ gitGraph
 
 ```bash
 # 1. Create hotfix branch
-git checkout -b hotfix/postgres-oom main
+git checkout -b hotfix/redis-oom main
 
 # 2. Make fix
-vim base/database/postgres/statefulset.yaml
+vim base/database/redis/deployment.yaml
 
 # 3. Test locally with kustomize
-kustomize build base/database/postgres
+kustomize build base/database/redis
 
 # 4. Commit
-git commit -am "fix(postgres): increase memory limit to prevent OOM"
+git commit -am "fix(redis): increase memory limit to prevent OOM"
 
 # 5. Push and create PR (with "hotfix" label for fast-track review)
-git push origin hotfix/postgres-oom
+git push origin hotfix/redis-oom
 ```
 
 ### PR Requirements
@@ -870,22 +845,23 @@ kubectl rollout undo deployment/<name> -n <namespace>
 ### Database Connection Issues
 
 ```bash
-# 1. Check PostgreSQL status
-kubectl get pods -n database -l app=postgres
-kubectl logs postgres-0 -n database --tail=100
+# 1. Check PgBouncer (in-cluster)
+kubectl -n database get pods -l app=pgbouncer-vps
+kubectl -n database logs deploy/pgbouncer-vps --tail=100
 
-# 2. Check PgBouncer
-kubectl get pods -n database -l app=pgbouncer
-kubectl logs deploy/pgbouncer -n database
+# 2. Check PostgreSQL on the VPS (infra team; ssh to 192.168.0.40 prod / 192.168.0.60 staging)
+systemctl status postgresql
+journalctl -u postgresql -n 100
 
-# 3. Test direct connection
-kubectl exec -it postgres-0 -n database -- \
-  psql -U postgres -d goapps -c "SELECT 1"
+# 3. Test a connection from the LAN (192.168.0.0/24)
+psql "host=192.168.0.60 dbname=finance_db user=finance_ro sslmode=require" -c "SELECT 1"
 
-# 4. Check connection count
-kubectl exec -it postgres-0 -n database -- \
-  psql -U postgres -c "SELECT count(*) FROM pg_stat_activity"
+# 4. Check connection count (on the VPS)
+sudo -u postgres psql -c "SELECT datname, count(*) FROM pg_stat_activity GROUP BY 1"
 ```
+
+PostgreSQL itself is no longer a Kubernetes workload: there is no `postgres-0` pod to exec into
+or restart. Server-side fixes (restart, config) are done by the infra team on the VPS.
 
 ### Rollback Deployment
 
