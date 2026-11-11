@@ -656,3 +656,44 @@ data:
             labels:
               severity: warning
             isPaused: false
+
+          - uid: vps-nonpublic-schema
+            title: VPS PostgreSQL non-public schema
+            condition: C
+            data:
+              - refId: A
+                relativeTimeRange:
+                  from: 900
+                  to: 0
+                datasourceUid: prometheus
+                model:
+                  # ADR 0001: app objects live in schema public only. Allow-list: prod finance_db.cmp (legacy reporting views).
+                  expr: 'count by (instance, datname, schemaname) (pg_vps_nonpublic_schema_objects{job="vps-postgres"} unless on (datname, schemaname) pg_vps_nonpublic_schema_objects{datname="finance_db", schemaname="cmp"})'
+                  refId: A
+              - refId: C
+                relativeTimeRange:
+                  from: 0
+                  to: 0
+                datasourceUid: __expr__
+                model:
+                  conditions:
+                    - evaluator:
+                        params: [0]
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params: [A]
+                      reducer:
+                        type: last
+                  refId: C
+                  type: classic_conditions
+            noDataState: OK
+            execErrState: Error
+            for: 15m
+            annotations:
+              summary: "Schema {{ $labels.datname }}.{{ $labels.schemaname }} exists on {{ $labels.instance }}"
+              description: "Only schema public is allowed (goapps-backend ADR 0001). Find who created it and move/drop it; see docs/runbooks/postgres-vps-monitoring.md"
+            labels:
+              severity: warning
+            isPaused: false

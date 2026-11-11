@@ -70,23 +70,24 @@ spec:
                   fieldPath: metadata.namespace
             # Database config - same as IAM deployment
             - name: DATABASE_HOST
-              value: "postgres.database.svc.cluster.local"
+              # overridden per env (VPS IP) in overlays/*/jobs
+              value: "set-in-overlay.invalid"
             - name: DATABASE_PORT
               value: "5432"
             - name: DATABASE_NAME
-              value: "goapps"
+              value: "iam_db"
             - name: DATABASE_SSLMODE
-              value: "disable"
+              value: "require"
             - name: DATABASE_USER
               valueFrom:
                 secretKeyRef:
-                  name: postgres-secret
-                  key: POSTGRES_USER
+                  name: iam-db-secret
+                  key: OWNER_USER
             - name: DATABASE_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: postgres-secret
-                  key: POSTGRES_PASSWORD
+                  name: iam-db-secret
+                  key: OWNER_PASSWORD
             # --- Custom admin credentials (optional) ---
             # If iam-seed-secret does not exist, seeder uses defaults
             # (random password in staging/production, printed to logs).

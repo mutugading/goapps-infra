@@ -45,13 +45,13 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
-            # Database config (via PgBouncer per platform rule)
+            # Database config (via pgbouncer-vps per platform rule)
             - name: DATABASE_HOST
-              value: "pgbouncer.database.svc.cluster.local"
+              value: "pgbouncer-vps.database.svc.cluster.local"
             - name: DATABASE_PORT
               value: "5432"
             - name: DATABASE_NAME
-              value: "goapps"
+              value: "finance_db"
             - name: DATABASE_SSLMODE
               value: "disable"
             # REQUIRED because DATABASE_HOST is PgBouncer in transaction pooling
@@ -67,13 +67,13 @@ spec:
             - name: DATABASE_USER
               valueFrom:
                 secretKeyRef:
-                  name: postgres-secret
-                  key: POSTGRES_USER
+                  name: finance-db-secret
+                  key: APP_USER
             - name: DATABASE_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: postgres-secret
-                  key: POSTGRES_PASSWORD
+                  name: finance-db-secret
+                  key: APP_PASSWORD
             # RabbitMQ config (constructed from secret user/password + service DNS)
             - name: RABBITMQ_USER
               valueFrom:

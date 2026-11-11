@@ -49,23 +49,24 @@ spec:
                 fieldRef:
                   fieldPath: metadata.namespace
             - name: DATABASE_HOST
-              value: "postgres.database.svc.cluster.local"
+              # overridden per env (VPS IP) in overlays/*/jobs
+              value: "set-in-overlay.invalid"
             - name: DATABASE_PORT
               value: "5432"
             - name: DATABASE_NAME
-              value: "goapps"
+              value: "finance_db"
             - name: DATABASE_SSLMODE
-              value: "disable"
+              value: "require"
             - name: DATABASE_USER
               valueFrom:
                 secretKeyRef:
-                  name: postgres-secret
-                  key: POSTGRES_USER
+                  name: finance-db-secret
+                  key: OWNER_USER
             - name: DATABASE_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: postgres-secret
-                  key: POSTGRES_PASSWORD
+                  name: finance-db-secret
+                  key: OWNER_PASSWORD
           resources:
             requests:
               memory: "64Mi"
