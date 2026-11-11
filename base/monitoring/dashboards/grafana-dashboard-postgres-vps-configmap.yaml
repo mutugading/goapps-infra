@@ -17,7 +17,7 @@ data:
         "vps"
       ],
       "schemaVersion": 39,
-      "version": 4,
+      "version": 5,
       "editable": true,
       "timezone": "browser",
       "refresh": "1m",
@@ -2230,6 +2230,257 @@ data:
             "x": 0,
             "y": 116
           }
+        },
+        {
+          "id": 122,
+          "type": "row",
+          "title": "Logs (Loki)",
+          "collapsed": false,
+          "panels": [],
+          "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 123
+          }
+        },
+        {
+          "id": 123,
+          "type": "timeseries",
+          "title": "Log entries/min by level (WARNING+)",
+          "description": "",
+          "datasource": {
+            "type": "loki",
+            "uid": "${loki_datasource}"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum by (level) (count_over_time({job=\"postgres\", instance=\"$instance\", level=~\"WARNING|ERROR|FATAL|PANIC\"}[1m]))",
+              "datasource": {
+                "type": "loki",
+                "uid": "${loki_datasource}"
+              },
+              "queryType": "range",
+              "legendFormat": "{{level}}"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 8,
+            "x": 0,
+            "y": 124
+          }
+        },
+        {
+          "id": 124,
+          "type": "timeseries",
+          "title": "Auth failures / 5m",
+          "description": "",
+          "datasource": {
+            "type": "loki",
+            "uid": "${loki_datasource}"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum(count_over_time({job=\"postgres\", instance=\"$instance\"} |= \"password authentication failed\" [5m]))",
+              "datasource": {
+                "type": "loki",
+                "uid": "${loki_datasource}"
+              },
+              "queryType": "range",
+              "legendFormat": "failures"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 8,
+            "x": 8,
+            "y": 124
+          }
+        },
+        {
+          "id": 125,
+          "type": "timeseries",
+          "title": "Slow queries/min (>1 s) by db",
+          "description": "",
+          "datasource": {
+            "type": "loki",
+            "uid": "${loki_datasource}"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum by (db) (count_over_time({job=\"postgres\", instance=\"$instance\"} |= \"duration: \" [1m]))",
+              "datasource": {
+                "type": "loki",
+                "uid": "${loki_datasource}"
+              },
+              "queryType": "range",
+              "legendFormat": "{{db}}"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 8,
+            "x": 16,
+            "y": 124
+          }
+        },
+        {
+          "id": 126,
+          "type": "logs",
+          "title": "Slow queries (>1 s)",
+          "description": "",
+          "datasource": {
+            "type": "loki",
+            "uid": "${loki_datasource}"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "{job=\"postgres\", instance=\"$instance\"} |= \"duration: \"",
+              "datasource": {
+                "type": "loki",
+                "uid": "${loki_datasource}"
+              },
+              "queryType": "range"
+            }
+          ],
+          "options": {
+            "showTime": true,
+            "wrapLogMessage": true,
+            "sortOrder": "Descending",
+            "enableLogDetails": true,
+            "dedupStrategy": "none"
+          },
+          "gridPos": {
+            "h": 9,
+            "w": 24,
+            "x": 0,
+            "y": 131
+          }
+        },
+        {
+          "id": 127,
+          "type": "logs",
+          "title": "ERROR / FATAL / PANIC",
+          "description": "",
+          "datasource": {
+            "type": "loki",
+            "uid": "${loki_datasource}"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "{job=\"postgres\", instance=\"$instance\", level=~\"ERROR|FATAL|PANIC\"}",
+              "datasource": {
+                "type": "loki",
+                "uid": "${loki_datasource}"
+              },
+              "queryType": "range"
+            }
+          ],
+          "options": {
+            "showTime": true,
+            "wrapLogMessage": true,
+            "sortOrder": "Descending",
+            "enableLogDetails": true,
+            "dedupStrategy": "none"
+          },
+          "gridPos": {
+            "h": 9,
+            "w": 24,
+            "x": 0,
+            "y": 140
+          }
+        },
+        {
+          "id": 128,
+          "type": "logs",
+          "title": "Lock waits & deadlocks",
+          "description": "",
+          "datasource": {
+            "type": "loki",
+            "uid": "${loki_datasource}"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "{job=\"postgres\", instance=\"$instance\"} |~ \"still waiting for|acquired .* after|deadlock detected\"",
+              "datasource": {
+                "type": "loki",
+                "uid": "${loki_datasource}"
+              },
+              "queryType": "range"
+            }
+          ],
+          "options": {
+            "showTime": true,
+            "wrapLogMessage": true,
+            "sortOrder": "Descending",
+            "enableLogDetails": true,
+            "dedupStrategy": "none"
+          },
+          "gridPos": {
+            "h": 9,
+            "w": 24,
+            "x": 0,
+            "y": 149
+          }
+        },
+        {
+          "id": 129,
+          "type": "logs",
+          "title": "pg-backup / pg-restore-test (journald)",
+          "description": "",
+          "datasource": {
+            "type": "loki",
+            "uid": "${loki_datasource}"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "{job=\"pg-backup\", instance=\"$instance\"}",
+              "datasource": {
+                "type": "loki",
+                "uid": "${loki_datasource}"
+              },
+              "queryType": "range"
+            }
+          ],
+          "options": {
+            "showTime": true,
+            "wrapLogMessage": true,
+            "sortOrder": "Descending",
+            "enableLogDetails": true,
+            "dedupStrategy": "none"
+          },
+          "gridPos": {
+            "h": 9,
+            "w": 24,
+            "x": 0,
+            "y": 158
+          }
         }
       ],
       "templating": {
@@ -2283,6 +2534,19 @@ data:
               "value": "$__all"
             },
             "allValue": ".*"
+          },
+          {
+            "name": "loki_datasource",
+            "label": "Loki datasource",
+            "type": "datasource",
+            "query": "loki",
+            "current": {
+              "selected": false,
+              "text": "Loki",
+              "value": "loki"
+            },
+            "hide": 0,
+            "refresh": 1
           }
         ]
       }

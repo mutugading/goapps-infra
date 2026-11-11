@@ -23,7 +23,7 @@ kube-prometheus-stack.
   - `base/monitoring/dashboards/grafana-dashboard-postgres-vps-configmap.yaml` — dashboard "PostgreSQL VPS"
     (uid `postgres-vps-dashboard`).
   - `base/monitoring/alert-rules/postgres-vps-alerts.yaml` — Grafana alert group "PostgreSQL VPS Alerts"
-    (folder Database, 16 rules).
+    (folder Database, 17 metric rules; +3 log rules in `postgres-vps-log-alerts.yaml`, see Logs section).
 
 The old "PostgreSQL Dashboard", `postgres-alerts.yaml` and `base/database/exporter/` still watch the frozen
 in-cluster Postgres (rollback target). They are removed in the decommission phase (P7).
@@ -65,3 +65,47 @@ For a new `<svc>_db`, in addition to the DB itself:
 - Add the DB to `pg-backup`.
 
 `scripts/postgres/new-service-db.sh <svc> --target staging|production` does the VPS part (roles, DB, grants, pg_hba, monitor, exporter, pg-backup) and prints the K8s/repo follow-ups. The full checklist is kept with the migration docs (`monitoring-new-service-db.md`).
+
+## Logs → Loki (B7)
+
+**What flows:** Grafana Alloy on each VPS ships (1) the Postgres file log `/var/log/postgresql/postgresql-18-main.log` (`job="postgres"`) and (2) journald units `pg-backup.service` / `pg-restore-test.service` (`job="pg-backup"`) to the in-cluster Loki. bind-parameter lines (`DETAIL:  parameters:`, `... with parameters:`) are dropped and `PASSWORD '...'` in DDL is masked (residual PII: slow `duration: ... statement:` and `STATEMENT:` lines may still contain SQL literals); systemd's own Started/Failed lines for the backup units are not shipped (failures are covered by B6 metrics); slow-query lines are truncated to 600 chars; multi-line statements are joined.
+
+**Labels:** `job`, `env` (`staging`|`production`), `instance` (`psql-goapps-stg`|`psql-goapps-prod`, same as B6), `level` (LOG/ERROR/FATAL/PANIC/WARNING/...), `db`; journald also `unit`. User/pid/host stay in the line (low cardinality). Staging = VPS .60 → K3s .113; production = VPS .40 → K3s .112.
+
+**Ingress:** `base/monitoring/loki-push/loki-push-ingress.yaml` exposes only `https://loki-push.mutugading.com/loki/api/v1/push` (Exact path, basic auth, 20 rps, 10m body). No IP whitelist: nginx sees the SNAT address 10.42.0.1. Each VPS needs `/etc/hosts`: `<own K3s node IP> loki-push.mutugading.com`.
+
+**Secret (manual, never in git)** `loki-push-basic-auth` in ns `monitoring` on each cluster, key `auth`, user `vps-push`, a different 32-char password per cluster:
+
+```bash
+PW=$(openssl rand -base64 33 | tr -d '/+=' | cut -c1-32)
+kubectl -n monitoring create secret generic loki-push-basic-auth \
+  --from-literal=auth="vps-push:$(printf '%s' "$PW" | openssl passwd -apr1 -stdin)" --dry-run=client -o yaml | kubectl apply -f -
+```
+
+The same password goes into `LOKI_PUSH_PASSWORD` in `/etc/default/alloy` on that VPS.
+
+**Apply on BOTH clusters (single files, never `-k`):**
+
+```bash
+kubectl apply -f base/monitoring/loki-push/loki-push-ingress.yaml
+kubectl apply -f base/monitoring/dashboards/grafana-dashboard-postgres-vps-configmap.yaml
+# only after Alloy ships logs on that cluster, else logs-absent fires:
+kubectl apply -f base/monitoring/alert-rules/postgres-vps-log-alerts.yaml
+```
+
+**LogQL quick queries (Grafana Explore, datasource Loki):**
+
+```logql
+{job="postgres", instance="psql-goapps-prod", level=~"ERROR|FATAL|PANIC"}
+{job="postgres", instance="psql-goapps-prod"} |= "duration: "
+{job="postgres"} |= "password authentication failed"
+{job="pg-backup", instance="psql-goapps-stg"}
+```
+
+**Alert rules** (group "PostgreSQL VPS Log Alerts", folder Database):
+
+| uid | Condition | Severity |
+|-----|-----------|----------|
+| `vps-pg-log-fatal-panic` | FATAL/PANIC in 5m, excluding benign shutdown/disconnect noise and auth failures, > 0 | critical |
+| `vps-pg-auth-failures` | `password authentication failed` >= 5 in 5m | warning |
+| `vps-pg-logs-absent` | no postgres log lines for 15m (Alloy/push broken; noData = Alerting) | warning |

@@ -1,0 +1,39 @@
+# Loki push endpoint for the external Postgres VPS (B7).
+# Purpose: Grafana Alloy on the VPS ships Postgres + pg-backup logs to the
+#   in-cluster Loki (svc loki:3100) via https://loki-push.mutugading.com/loki/api/v1/push.
+# Only the exact push path is exposed (query API stays internal).
+# No IP whitelist on purpose: ingress-nginx (etp=Cluster) sees every client as
+#   the SNAT address 10.42.0.1, so whitelist-source-range cannot work.
+#   Protection = TLS + basic auth + Exact path + rate limit.
+# Secret `loki-push-basic-auth` (key: auth, htpasswd line, user vps-push) is
+#   created MANUALLY on each cluster and is NEVER committed to git.
+# Apply (base/monitoring is outside ArgoCD), on BOTH clusters:
+#   kubectl apply -f base/monitoring/loki-push/loki-push-ingress.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: loki-push
+  namespace: monitoring
+  annotations:
+    nginx.ingress.kubernetes.io/auth-type: basic
+    nginx.ingress.kubernetes.io/auth-secret: loki-push-basic-auth
+    nginx.ingress.kubernetes.io/auth-realm: "Loki push - authentication required"
+    nginx.ingress.kubernetes.io/proxy-body-size: 10m
+    nginx.ingress.kubernetes.io/limit-rps: "20"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - loki-push.mutugading.com
+      secretName: goapps-tls
+  rules:
+    - host: loki-push.mutugading.com
+      http:
+        paths:
+          - path: /loki/api/v1/push
+            pathType: Exact
+            backend:
+              service:
+                name: loki
+                port:
+                  number: 3100
