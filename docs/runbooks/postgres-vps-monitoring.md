@@ -53,7 +53,7 @@ Expected: `vps-node <instance> up` and `vps-postgres <instance> up`.
 | Target `down`, `context deadline exceeded` | from the K3s node: `curl -m5 http://<vps>:9100/metrics`; ufw on the VPS must allow 9100/9187 from the node IP |
 | `pg_up 0` | on the VPS: `journalctl -u prometheus-postgres-exporter -n 30` (password / pg_hba for `monitor`) |
 | Backup panels empty | `node_textfile_scrape_error` must be 0; the `.prom` files must be mode 0644 |
-| Alert **VPS PostgreSQL non-public schema** | a schema other than `public` exists in a `<svc>_db` (ADR 0001). On the VPS: `sudo -u postgres psql -d <db> -c '\dn+'`, find the creator (migration? manual?), move objects to `public` or drop the schema. Allow-list (in the alert expr): prod `finance_db.cmp`. Metric `pg_vps_nonpublic_schema_objects` comes from the custom query of the same name (per DB, `master: false`) |
+| Alert **VPS PostgreSQL non-public schema** | a schema other than `public` exists in a `<svc>_db` (ADR 0001). On the VPS: `sudo -u postgres psql -d <db> -c '\dn+'`, find the creator (migration? manual?), move objects to `public` or drop the schema. Allow-list (in the alert expr, no instance matcher, so prod and staging): `finance_db.cmp`. Metric `pg_vps_nonpublic_schema_objects` comes from the custom query of the same name (per DB, `master: false`) |
 | Per-table panels empty | needs `--auto-discover-databases --include-databases=…`, pg_hba `host <dbs> monitor 127.0.0.1/32` and `monitor` CONNECTION LIMIT ≥ 2 + number of DBs |
 
 ## Adding a new service database
