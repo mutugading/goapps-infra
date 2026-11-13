@@ -1,0 +1,60 @@
+# payroll-recon Job (D-62 (3)): operator CLI run by IT, least privilege: this Job carries ONLY the secrets that
+# cmd/recon reads (payroll_ro DSN only). Template, not synced by ArgoCD: render per environment, then set the image tag and
+# the arguments (subcommand + flags are in the CLI usage text), e.g.
+#   kustomize build services/payroll-service/overlays/<env>/jobs | sed "s|IMAGE_TAG|<tag>|" \
+#     | yq 'select(.metadata.name == "payroll-recon") | .spec.template.spec.containers[0].args = ["diff","-yymm","202701","-target","run:1"]' | kubectl apply -f -
+# Generated files (salary data!) go to /out (emptyDir): `kubectl cp` them out before the pod is deleted.
+# Host and sslmode come from ConfigMap payroll-cli-config (generated per overlay, no secret in it).
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: payroll-recon
+  labels:
+    app: payroll-service
+    component: cli
+    app.kubernetes.io/name: payroll-service
+    app.kubernetes.io/component: cli
+    app.kubernetes.io/part-of: goapps
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        app: payroll-service
+        component: cli
+    spec:
+      imagePullSecrets:
+        - name: ghcr-secret
+      restartPolicy: Never
+      securityContext:
+        fsGroup: 1000          # image user appuser (uid/gid 1000) must read the secret mount and write /out
+      containers:
+        - name: payroll-recon
+          image: ghcr.io/mutugading/payroll-service:IMAGE_TAG
+          imagePullPolicy: Always
+          command: ["/app/payroll-recon"]
+          env:
+            - name: PAYROLL_PG_HOST
+              valueFrom: {configMapKeyRef: {name: payroll-cli-config, key: PG_HOST}}
+            - name: PAYROLL_PG_SSLMODE
+              valueFrom: {configMapKeyRef: {name: payroll-cli-config, key: PG_SSLMODE}}
+            - name: RO_USER
+              valueFrom: {secretKeyRef: {name: payroll-db-secret, key: RO_USER}}
+            - name: RO_PASSWORD
+              valueFrom: {secretKeyRef: {name: payroll-db-secret, key: RO_PASSWORD}}
+            - name: PAYROLL_RO_DSN
+              value: "host=$(PAYROLL_PG_HOST) port=5432 dbname=payroll user=$(RO_USER) password=$(RO_PASSWORD) sslmode=$(PAYROLL_PG_SSLMODE)"
+          volumeMounts:
+            - name: out
+              mountPath: /out
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "1Gi"
+              cpu: "1000m"
+      volumes:
+        - name: out
+          emptyDir: {}

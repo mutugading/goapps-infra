@@ -1,0 +1,16 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: payroll-service
+  labels:
+    app: payroll-service
+spec:
+  selector:
+    matchLabels:
+      app: payroll-service
+  namespaceSelector:
+    any: true
+  endpoints:
+    - port: http
+      interval: 30s
+      path: /metrics

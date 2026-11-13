@@ -1,0 +1,17 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Long-running API only. The one-off Jobs live in ./jobs (migrate, operator CLI): they are applied
+# out-of-band (see overlays/<env>/jobs/kustomization.yaml), not synced by ArgoCD, like ppc/finance.
+# No Ingress: the frontend BFF reaches payroll over in-cluster gRPC (D-08); nothing is exposed publicly.
+resources:
+  - deployment.yaml
+  - service.yaml
+  - servicemonitor.yaml
+
+labels:
+  - pairs:
+      app.kubernetes.io/name: payroll-service
+      app.kubernetes.io/component: api
+      app.kubernetes.io/part-of: goapps
+    includeSelectors: false

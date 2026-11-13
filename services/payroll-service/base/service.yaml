@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: payroll-service
+  labels:
+    app: payroll-service
+spec:
+  type: ClusterIP
+  ports:
+    - name: grpc
+      port: 50054
+      targetPort: 50054
+    # HTTP gateway + /healthz + /metrics share this port (no separate metrics ServicePort).
+    - name: http
+      port: 8084
+      targetPort: 8084
+  selector:
+    app: payroll-service
