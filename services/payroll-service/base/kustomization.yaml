@@ -8,6 +8,7 @@ resources:
   - deployment.yaml
   - service.yaml
   - servicemonitor.yaml
+  - networkpolicy.yaml
 
 labels:
   - pairs:

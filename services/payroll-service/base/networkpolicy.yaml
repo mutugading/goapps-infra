@@ -1,0 +1,53 @@
+# NetworkPolicy for the payroll API (T028h2 (5)). Takes effect only if the cluster CNI enforces NetworkPolicy
+# (k3s embeds kube-router's controller; Flannel alone does not). Ingress: only the frontend BFF (gRPC 50054) and
+# Prometheus (HTTP 8084 /metrics, from the monitoring namespace). Egress: DNS, PgBouncer (database ns, 5432) and
+# the Jaeger collector (observability ns, 4317); the API holds no other dependency (no IAM/Redis/RabbitMQ client).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: payroll-service
+spec:
+  podSelector:
+    matchLabels:
+      app: payroll-service
+      component: api
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: frontend
+      ports:
+        - {protocol: TCP, port: 50054}
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - {protocol: TCP, port: 8084}
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: database
+          podSelector:
+            matchLabels:
+              app: pgbouncer-vps
+      ports:
+        - {protocol: TCP, port: 5432}
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: observability
+      ports:
+        - {protocol: TCP, port: 4317}

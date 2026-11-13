@@ -17,7 +17,7 @@ metadata:
     app.kubernetes.io/part-of: goapps
 spec:
   backoffLimit: 0
-  ttlSecondsAfterFinished: 86400
+  ttlSecondsAfterFinished: 3600   # /out holds salary data: pod (and its emptyDir) is removed 1 h after finish; kubectl cp before then
   template:
     metadata:
       labels:
@@ -29,6 +29,11 @@ spec:
       restartPolicy: Never
       securityContext:
         fsGroup: 1000          # image user appuser (uid/gid 1000) must read the secret mount and write /out
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: payroll-sync
           image: ghcr.io/mutugading/payroll-service:IMAGE_TAG
@@ -60,9 +65,16 @@ spec:
               valueFrom: {secretKeyRef: {name: payroll-oracle-sync-secret, key: PAYROLL_SYNC_ORACLE_USER}}
             - name: PAYROLL_SYNC_ORACLE_PASSWORD
               valueFrom: {secretKeyRef: {name: payroll-oracle-sync-secret, key: PAYROLL_SYNC_ORACLE_PASSWORD}}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
           volumeMounts:
             - name: out
               mountPath: /out
+            - name: tmp
+              mountPath: /tmp
           resources:
             requests:
               memory: "128Mi"
@@ -72,4 +84,6 @@ spec:
               cpu: "1000m"
       volumes:
         - name: out
+          emptyDir: {}
+        - name: tmp
           emptyDir: {}

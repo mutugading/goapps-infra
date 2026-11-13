@@ -24,6 +24,7 @@ spec:
     metadata:
       labels:
         app: payroll-service
+        component: api      # lets NetworkPolicy tell the API from the CLI/migrate Job pods (selector stays app only)
       annotations:
         prometheus.io/scrape: "true"
         prometheus.io/port: "8084"
@@ -31,10 +32,24 @@ spec:
     spec:
       imagePullSecrets:
         - name: ghcr-secret
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000          # image user appuser (uid/gid 1000)
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: payroll-service
           image: ghcr.io/mutugading/payroll-service:latest
           imagePullPolicy: Always
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true   # the API writes nothing to disk; /tmp is an emptyDir just in case
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
           ports:
             - containerPort: 50054
               name: grpc
@@ -110,3 +125,6 @@ spec:
               port: 8084
             periodSeconds: 5
             failureThreshold: 3
+      volumes:
+        - name: tmp
+          emptyDir: {}

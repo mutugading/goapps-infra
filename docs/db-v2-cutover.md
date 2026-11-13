@@ -27,13 +27,14 @@ done
 ```
 (use the real per-role passwords for each service, not one shared value.)
 
-PgBouncer userlist, namespace `database`, only the three `*_app` users plus `monitor`
+PgBouncer userlist, namespace `database`, only the `*_app` users (iam, finance, ppc, payroll) plus `monitor`
 (passwords as plaintext or SCRAM verifier; plaintext works with scram-sha-256):
 
 ```
 "iam_app" "<password>"
 "finance_app" "<password>"
 "ppc_app" "<password>"
+"payroll_app" "<password>"
 "monitor" "<password>"
 ```
 ```bash

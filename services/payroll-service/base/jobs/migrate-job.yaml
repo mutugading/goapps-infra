@@ -28,10 +28,21 @@ spec:
       imagePullSecrets:
         - name: ghcr-secret
       restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: payroll-migrate
           image: ghcr.io/mutugading/payroll-service:IMAGE_TAG
           imagePullPolicy: Always
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
           command:
             - /app/migrate
             - -path

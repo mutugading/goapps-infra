@@ -6,3 +6,4 @@ resources:
   - report-job.yaml
   - mailer-job.yaml
   - recon-job.yaml
+  - networkpolicy.yaml

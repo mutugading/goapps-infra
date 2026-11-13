@@ -4,6 +4,7 @@
 #   kustomize build services/payroll-service/overlays/<env>/jobs | sed "s|IMAGE_TAG|<tag>|" \
 #     | yq 'select(.metadata.name == "payroll-recon") | .spec.template.spec.containers[0].args = ["diff","-yymm","202701","-target","run:1"]' | kubectl apply -f -
 # Generated files (salary data!) go to /out (emptyDir): `kubectl cp` them out before the pod is deleted.
+# Root filesystem is read-only: `recon extract-golden` (and any other file output) MUST use `-out /out/...`.
 # Host and sslmode come from ConfigMap payroll-cli-config (generated per overlay, no secret in it).
 apiVersion: batch/v1
 kind: Job
@@ -17,7 +18,7 @@ metadata:
     app.kubernetes.io/part-of: goapps
 spec:
   backoffLimit: 0
-  ttlSecondsAfterFinished: 86400
+  ttlSecondsAfterFinished: 3600   # /out holds salary data: pod (and its emptyDir) is removed 1 h after finish; kubectl cp before then
   template:
     metadata:
       labels:
@@ -29,6 +30,11 @@ spec:
       restartPolicy: Never
       securityContext:
         fsGroup: 1000          # image user appuser (uid/gid 1000) must read the secret mount and write /out
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: payroll-recon
           image: ghcr.io/mutugading/payroll-service:IMAGE_TAG
@@ -45,7 +51,14 @@ spec:
               valueFrom: {secretKeyRef: {name: payroll-db-secret, key: RO_PASSWORD}}
             - name: PAYROLL_RO_DSN
               value: "host=$(PAYROLL_PG_HOST) port=5432 dbname=payroll user=$(RO_USER) password=$(RO_PASSWORD) sslmode=$(PAYROLL_PG_SSLMODE)"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
           volumeMounts:
+            - name: tmp
+              mountPath: /tmp
             - name: out
               mountPath: /out
           resources:
@@ -57,4 +70,6 @@ spec:
               cpu: "1000m"
       volumes:
         - name: out
+          emptyDir: {}
+        - name: tmp
           emptyDir: {}

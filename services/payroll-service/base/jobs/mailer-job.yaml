@@ -17,7 +17,7 @@ metadata:
     app.kubernetes.io/part-of: goapps
 spec:
   backoffLimit: 0
-  ttlSecondsAfterFinished: 86400
+  ttlSecondsAfterFinished: 3600   # /out holds salary data: pod (and its emptyDir) is removed 1 h after finish; kubectl cp before then
   template:
     metadata:
       labels:
@@ -29,6 +29,11 @@ spec:
       restartPolicy: Never
       securityContext:
         fsGroup: 1000          # image user appuser (uid/gid 1000) must read the secret mount and write /out
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: payroll-mailer
           image: ghcr.io/mutugading/payroll-service:IMAGE_TAG
@@ -58,7 +63,14 @@ spec:
               value: "mgtpayslip@mutugading.com"
             - name: PAYROLL_SMTP_PASSWORD_FILE
               value: "/etc/payroll/smtp/PAYROLL_SMTP_PASSWORD"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
           volumeMounts:
+            - name: tmp
+              mountPath: /tmp
             - name: smtp
               mountPath: /etc/payroll/smtp
               readOnly: true
@@ -77,4 +89,6 @@ spec:
             secretName: payroll-smtp-secret
             defaultMode: 0440
         - name: out
+          emptyDir: {}
+        - name: tmp
           emptyDir: {}

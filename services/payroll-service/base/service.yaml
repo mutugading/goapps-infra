@@ -16,3 +16,4 @@ spec:
       targetPort: 8084
   selector:
     app: payroll-service
+    component: api   # Job/CLI pods share label app; only the API pod template carries component=api
