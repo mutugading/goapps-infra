@@ -667,7 +667,7 @@ data:
                   to: 0
                 datasourceUid: prometheus
                 model:
-                  # ADR 0001: app objects live in schema public only. Allow-list: prod finance_db.cmp (legacy reporting views).
+                  # ADR 0001: app objects live in schema public only. Allow-list: finance_db.cmp on prod and staging (legacy reporting views; no instance matcher, so it applies to every VPS).
                   expr: 'count by (instance, datname, schemaname) (pg_vps_nonpublic_schema_objects{job="vps-postgres"} unless on (datname, schemaname) pg_vps_nonpublic_schema_objects{datname="finance_db", schemaname="cmp"})'
                   refId: A
               - refId: C
