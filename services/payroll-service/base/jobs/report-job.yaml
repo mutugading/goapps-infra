@@ -53,7 +53,7 @@ spec:
             - name: APP_PASSWORD
               valueFrom: {secretKeyRef: {name: payroll-db-secret, key: APP_PASSWORD}}
             - name: PAYROLL_APP_DSN
-              value: "host=$(PAYROLL_PG_HOST) port=5432 dbname=payroll user=$(APP_USER) password=$(APP_PASSWORD) sslmode=$(PAYROLL_PG_SSLMODE)"
+              value: "host=$(PAYROLL_PG_HOST) port=5432 dbname=payroll_db user=$(APP_USER) password=$(APP_PASSWORD) sslmode=$(PAYROLL_PG_SSLMODE)"
             - name: PAYROLL_PII_KEY
               valueFrom: {secretKeyRef: {name: payroll-pii-secret, key: PAYROLL_PII_KEY}}
           securityContext:

@@ -50,7 +50,7 @@ spec:
             - name: RO_PASSWORD
               valueFrom: {secretKeyRef: {name: payroll-db-secret, key: RO_PASSWORD}}
             - name: PAYROLL_RO_DSN
-              value: "host=$(PAYROLL_PG_HOST) port=5432 dbname=payroll user=$(RO_USER) password=$(RO_PASSWORD) sslmode=$(PAYROLL_PG_SSLMODE)"
+              value: "host=$(PAYROLL_PG_HOST) port=5432 dbname=payroll_db user=$(RO_USER) password=$(RO_PASSWORD) sslmode=$(PAYROLL_PG_SSLMODE)"
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
