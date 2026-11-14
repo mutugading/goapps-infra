@@ -1106,6 +1106,13 @@ kubectl apply --dry-run=client -k base/database/
 trivy config --severity CRITICAL,HIGH .
 ```
 
+### Alat Validasi (terpasang lokal)
+
+- **Alat:** kustomize v5.4.3, kubeconform v0.6.7, actionlint 1.7.1 di `~/bin` (kubectl di `/usr/local/bin`). Cek dengan `command -v`, jangan `find /`.
+- **Validasi manifest:** `kustomize build <overlay> | kubeconform -strict -summary`
+- **Validasi workflow:** `actionlint`
+- **Pasang di mesin baru:** `scripts/install-infra-tools.sh`
+
 ### CI Validation
 
 The CI pipeline (`ci.yml`) runs three validation jobs on every push/PR:
