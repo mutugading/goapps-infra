@@ -8,6 +8,9 @@
 # jobs/ overlays reference ../../../base/*.yaml files, so they need
 # `--load-restrictor LoadRestrictionsNone`.
 #
+# Also: any env DSN (`dbname=` / postgres:// URL) must name <db>_db, and the
+# pgbouncer-vps [databases] keys per env must be exactly the service DBs.
+#
 # Usage: scripts/ci/check-db-overlays.sh [repo-root]   (needs kustomize, python3)
 set -euo pipefail
 
@@ -48,6 +51,17 @@ for doc in re.split(r"(?m)^---\s*$", text):
     oid = f"{kind}/{n.group(1) if n else '?'}"
     objs.append(oid)
     job = kind != "Deployment"
+    # Any env value carrying a DSN (keyword `dbname=` or postgres:// URL) must
+    # target this service's DB, whatever the variable is called (e.g. the
+    # payroll CLI Jobs build PAYROLL_*_DSN from a template).
+    if db != "none":
+        for val in re.findall(r"(?m)^\s*value: (.*)$", doc):
+            for got in re.findall(r"\bdbname=([^\s'\"]+)", val):
+                if got != f"{db}_db":
+                    viol.append(f"{oid} DSN dbname='{got}', want '{db}_db'")
+            for got in re.findall(r"postgres(?:ql)?://[^/\s]*/([^?\s'\"]*)", val):
+                if got != f"{db}_db":
+                    viol.append(f"{oid} URL db='{got}', want '{db}_db'")
     lines = doc.split("\n")
     i = 0
     while i < len(lines):
@@ -121,5 +135,63 @@ for dir in services/*/overlays/{staging,production} services/*/overlays/{staging
   fi
   rm -f "${out}" "${out}.err"
 done
+# pgbouncer-vps: the [databases] keys must be exactly <db>_db for every
+# service DB, each aliasing the same dbname on this env's VPS. A key that does
+# not match the DSN dbname makes every pooled connection fail at runtime.
+read -r -d '' PGBCHECK <<'PY' || true
+import re, sys
+path, ip, want = sys.argv[1], sys.argv[2], set(sys.argv[3].split(","))
+text = open(path).read()
+m = re.search(r"(?m)^  pgbouncer\.ini: \|-?\n((?:    .*\n|\s*\n)*)", text)
+if not m:
+    print("VIOLATION pgbouncer.ini not found in rendered ConfigMap"); sys.exit(1)
+ini = [l[4:] for l in m.group(1).split("\n")]
+viol, keys, sect = [], [], None
+for l in ini:
+    s = l.strip()
+    if not s or s.startswith(";"):
+        continue
+    h = re.match(r"^\[(\w+)\]$", s)
+    if h:
+        sect = h.group(1); continue
+    if sect != "databases":
+        continue
+    kv = re.match(r"^(\S+)\s*=\s*(.*)$", s)
+    if not kv:
+        viol.append(f"unparsable [databases] line '{s}'"); continue
+    k, v = kv.groups()
+    keys.append(k)
+    dbn = re.search(r"\bdbname=(\S+)", v)
+    host = re.search(r"\bhost=(\S+)", v)
+    if not dbn or dbn.group(1) != k:
+        viol.append(f"key '{k}' dbname is '{dbn.group(1) if dbn else None}', want '{k}'")
+    if not host or host.group(1) != ip:
+        viol.append(f"key '{k}' host is '{host.group(1) if host else None}', want '{ip}'")
+dup = sorted({k for k in keys if keys.count(k) > 1})
+if dup:
+    viol.append(f"duplicate keys {dup}")
+if set(keys) != want:
+    viol.append(f"keys {sorted(set(keys))}, want {sorted(want)}")
+for x in viol:
+    print("VIOLATION " + x)
+sys.exit(1 if viol else 0)
+PY
+
+want_dbs="$(for d in services/*/; do x="$(svc_db "$(basename "${d}")")"; [ -n "${x}" ] && [ "${x}" != none ] && echo "${x}_db"; done | sort -u | paste -sd,)"
+for env in staging production; do
+  dir="overlays/${env}/pgbouncer-vps"
+  out="$(mktemp)"
+  if ! kustomize build "${dir}" > "${out}" 2> "${out}.err"; then
+    printf '%-62s %-8s %s\n' "${dir}" - "BUILD FAILED"; cat "${out}.err" >&2; fail=1
+  elif res="$(python3 -I -c "${PGBCHECK}" "${out}" "$(vps_ip "${env}")" "${want_dbs}")"; then
+    printf '%-62s %-8s %s\n' "${dir}" "$(tr ',' '\n' <<<"${want_dbs}" | grep -c .)" OK
+  else
+    printf '%-62s %-8s %s\n' "${dir}" - FAIL
+    grep '^VIOLATION' <<<"${res}" | sed "s|^|  ${dir}: |"
+    fail=1
+  fi
+  rm -f "${out}" "${out}.err"
+done
+
 if [ "${fail}" -ne 0 ]; then echo "DB overlay check FAILED"; exit 1; fi
 echo "DB overlay check passed"
