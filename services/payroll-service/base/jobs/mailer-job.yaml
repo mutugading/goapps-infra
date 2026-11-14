@@ -1,0 +1,94 @@
+# payroll-mailer Job (D-62 (3)): operator CLI run by IT, least privilege: this Job carries ONLY the secrets that
+# cmd/mailer reads (payroll_app DSN, SMTP settings and password file). Template, not synced by ArgoCD: render per environment, then set the image tag and
+# the arguments (subcommand + flags are in the CLI usage text), e.g.
+#   kustomize build services/payroll-service/overlays/<env>/jobs | sed "s|IMAGE_TAG|<tag>|" \
+#     | yq 'select(.metadata.name == "payroll-mailer") | .spec.template.spec.containers[0].args = ["send","-batch","1","-yymm","202701","-division","SOLO","-wait"]' | kubectl apply -f -
+# Generated files (salary data!) go to /out (emptyDir): `kubectl cp` them out before the pod is deleted.
+# Host and sslmode come from ConfigMap payroll-cli-config (generated per overlay, no secret in it).
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: payroll-mailer
+  labels:
+    app: payroll-service
+    component: cli
+    app.kubernetes.io/name: payroll-service
+    app.kubernetes.io/component: cli
+    app.kubernetes.io/part-of: goapps
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 3600   # /out holds salary data: pod (and its emptyDir) is removed 1 h after finish; kubectl cp before then
+  template:
+    metadata:
+      labels:
+        app: payroll-service
+        component: cli
+    spec:
+      imagePullSecrets:
+        - name: ghcr-secret
+      restartPolicy: Never
+      securityContext:
+        fsGroup: 1000          # image user appuser (uid/gid 1000) must read the secret mount and write /out
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: payroll-mailer
+          image: ghcr.io/mutugading/payroll-service:IMAGE_TAG
+          imagePullPolicy: Always
+          command: ["/app/payroll-mailer"]
+          env:
+            - name: PAYROLL_PG_HOST
+              valueFrom: {configMapKeyRef: {name: payroll-cli-config, key: PG_HOST}}
+            - name: PAYROLL_PG_SSLMODE
+              valueFrom: {configMapKeyRef: {name: payroll-cli-config, key: PG_SSLMODE}}
+            - name: APP_USER
+              valueFrom: {secretKeyRef: {name: payroll-db-secret, key: APP_USER}}
+            - name: APP_PASSWORD
+              valueFrom: {secretKeyRef: {name: payroll-db-secret, key: APP_PASSWORD}}
+            - name: PAYROLL_APP_DSN
+              value: "host=$(PAYROLL_PG_HOST) port=5432 dbname=payroll user=$(APP_USER) password=$(APP_PASSWORD) sslmode=$(PAYROLL_PG_SSLMODE)"
+            # SMTP (D-62 (5)(8)): implicit TLS on 465; only the password is secret, read from a file mount.
+            - name: PAYROLL_SMTP_HOST
+              value: "mail.mutugading.com"
+            - name: PAYROLL_SMTP_PORT
+              value: "465"
+            - name: PAYROLL_SMTP_TLS
+              value: "TLS"
+            - name: PAYROLL_SMTP_USER
+              value: "mgtpayslip@mutugading.com"
+            - name: PAYROLL_SMTP_FROM
+              value: "mgtpayslip@mutugading.com"
+            - name: PAYROLL_SMTP_PASSWORD_FILE
+              value: "/etc/payroll/smtp/PAYROLL_SMTP_PASSWORD"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: smtp
+              mountPath: /etc/payroll/smtp
+              readOnly: true
+            - name: out
+              mountPath: /out
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "1Gi"
+              cpu: "1000m"
+      volumes:
+        - name: smtp
+          secret:
+            secretName: payroll-smtp-secret
+            defaultMode: 0440
+        - name: out
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}

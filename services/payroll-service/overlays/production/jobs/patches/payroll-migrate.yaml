@@ -1,0 +1,22 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: payroll-migrate
+spec:
+  template:
+    spec:
+      containers:
+        - name: payroll-migrate
+          env:
+            - name: DATABASE_USER
+              valueFrom:
+                secretKeyRef:
+                  name: payroll-db-secret
+                  key: OWNER_USER
+            - name: DATABASE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: payroll-db-secret
+                  key: OWNER_PASSWORD
+            - name: DATABASE_URL
+              value: "postgres://$(DATABASE_USER):$(DATABASE_PASSWORD)@192.168.0.40:5432/payroll_db?sslmode=require&x-migrations-table=schema_migrations_payroll&options=-c%20lock_timeout%3D10s%20-c%20statement_timeout%3D0"

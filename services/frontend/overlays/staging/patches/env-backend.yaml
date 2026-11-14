@@ -20,6 +20,10 @@ spec:
               value: "ppc-service"
             - name: PPC_GRPC_PORT
               value: "50053"
+            - name: PAYROLL_GRPC_HOST
+              value: "payroll-service"
+            - name: PAYROLL_GRPC_PORT
+              value: "50054"
             # Internal service secret for the PPC BFF routes that proxy finance's
             # CostMasterLookupService (/api/v1/ppc/products, .../products/route-lookup,
             # /api/v1/ppc/parameters). createInternalMetadataFromRequest sends this as

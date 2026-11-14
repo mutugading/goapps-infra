@@ -1,0 +1,18 @@
+# Runtime database endpoint (staging). Same path as ppc/finance (db-v2): pod -> pgbouncer-vps (in-cluster, no TLS on
+# that hop) -> VPS 192.168.0.60 (TLS). Role payroll_app only (RLS applies); credentials come from Secret payroll-db-secret
+# (APP_USER/APP_PASSWORD), never from this repo. Needs a `payroll_db` entry in the pgbouncer-vps config (DevOps, see
+# the T028h secret/prereq list in ARCHIVE).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payroll-service
+spec:
+  template:
+    spec:
+      containers:
+        - name: payroll-service
+          env:
+            - name: PAYROLL_DATABASE_HOST
+              value: "pgbouncer-vps.database.svc.cluster.local"
+            - name: PAYROLL_DATABASE_SSLMODE
+              value: "disable"

@@ -1,0 +1,73 @@
+# Payroll Migration Job: golang-migrate as `payroll_migrator` (it assumes ROLE payroll_owner through the
+# role setting from deploy/payroll/bootstrap.sql, D-04). The `payroll_db` DB (D-66), roles and schemas are created
+# beforehand by the DBA running bootstrap.sql as superuser (cluster-level, not a migration), so there is no
+# createdb Job. Run order: bootstrap.sql (DBA, once) -> payroll-migrate -> deploy.
+#
+# MANUAL USAGE (render per environment, then substitute the image tag):
+#   kustomize build services/payroll-service/overlays/<env>/jobs | sed "s|IMAGE_TAG|<tag>|" | kubectl apply -f -
+#   kubectl logs -f job/payroll-migrate -n <namespace>
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: payroll-migrate
+  labels:
+    app: payroll-service
+    component: migration
+    app.kubernetes.io/name: payroll-service
+    app.kubernetes.io/component: migration
+    app.kubernetes.io/part-of: goapps
+spec:
+  backoffLimit: 1
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app: payroll-service
+        component: migration
+    spec:
+      imagePullSecrets:
+        - name: ghcr-secret
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: payroll-migrate
+          image: ghcr.io/mutugading/payroll-service:IMAGE_TAG
+          imagePullPolicy: Always
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          command:
+            - /app/migrate
+            - -path
+            - /app/migrations
+            - -database
+            - $(DATABASE_URL)
+            - up
+          env:
+            - name: DATABASE_USER
+              valueFrom:
+                secretKeyRef:
+                  name: payroll-db-secret
+                  key: OWNER_USER
+            - name: DATABASE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: payroll-db-secret
+                  key: OWNER_PASSWORD
+            # DATABASE_URL (host + sslmode) is set per environment by the overlay patch.
+            - name: DATABASE_URL
+              value: "OVERRIDDEN_BY_OVERLAY"
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"

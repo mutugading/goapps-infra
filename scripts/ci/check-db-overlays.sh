@@ -19,6 +19,7 @@ svc_db() {
     iam-service) echo iam ;;
     finance-service | finance-worker | finance-cost-worker | finance-cost-orchestrator) echo finance ;;
     ppc-service) echo ppc ;;
+    payroll-service) echo payroll ;;
     frontend) echo none ;;
     *) echo "" ;;
   esac
