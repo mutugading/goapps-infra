@@ -5,5 +5,8 @@ resources:
   - complete-alerts.yaml
   - grafana-alertrules-configmap.yaml
   - postgres-alerts.yaml
+  - postgres-vps-alerts.yaml
+  # B7: apply with kubectl apply -f only after Alloy ships logs (vps-pg-logs-absent); never kubectl apply -k this dir
+  - postgres-vps-log-alerts.yaml
   - cost-calc-alerts.yaml
   - erp-integration-alerts.yaml

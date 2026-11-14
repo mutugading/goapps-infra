@@ -49,21 +49,22 @@ spec:
               fi
           env:
             - name: PGHOST
-              value: "postgres.database.svc.cluster.local"
+              # overridden per env (VPS IP) in overlays/*/jobs
+              value: "set-in-overlay.invalid"
             - name: PGPORT
               value: "5432"
             - name: PGDATABASE
-              value: "postgres"
+              value: "ppc_db"
             - name: PGUSER
               valueFrom:
                 secretKeyRef:
-                  name: postgres-secret
-                  key: POSTGRES_USER
+                  name: ppc-db-secret
+                  key: OWNER_USER
             - name: PGPASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: postgres-secret
-                  key: POSTGRES_PASSWORD
+                  name: ppc-db-secret
+                  key: OWNER_PASSWORD
           resources:
             requests:
               memory: "32Mi"

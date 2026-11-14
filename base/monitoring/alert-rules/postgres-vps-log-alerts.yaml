@@ -1,0 +1,151 @@
+# Grafana alert rules on Postgres VPS logs shipped to Loki (B7).
+# Same provisioning format as postgres-vps-alerts.yaml.
+# Apply only AFTER Alloy ships logs on that cluster (else logs-absent fires):
+#   kubectl apply -f base/monitoring/alert-rules/postgres-vps-log-alerts.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-vps-log-alerts
+  namespace: monitoring
+  labels:
+    grafana_alert: "1"
+data:
+  postgres-vps-log-alerts.yaml: |
+    apiVersion: 1
+    groups:
+      - orgId: 1
+        name: PostgreSQL VPS Log Alerts
+        folder: Database
+        interval: 1m
+        rules:
+          - uid: vps-pg-log-fatal-panic
+            title: VPS Postgres FATAL/PANIC in logs
+            condition: C
+            data:
+              - refId: A
+                relativeTimeRange:
+                  from: 300
+                  to: 0
+                datasourceUid: loki
+                model:
+                  expr: 'sum by (instance) (count_over_time({job="postgres", level=~"FATAL|PANIC"} !~ "terminating connection due to administrator command|terminating autovacuum process|the database system is (starting up|shutting down)|connection to client lost|idle-in-transaction timeout|password authentication failed" [5m]))'
+                  queryType: range
+                  datasource:
+                    type: loki
+                    uid: loki
+                  refId: A
+              - refId: C
+                relativeTimeRange:
+                  from: 0
+                  to: 0
+                datasourceUid: __expr__
+                model:
+                  conditions:
+                    - evaluator:
+                        params: [0]
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params: [A]
+                      reducer:
+                        type: last
+                  refId: C
+                  type: classic_conditions
+            noDataState: OK
+            execErrState: Error
+            for: 0s
+            annotations:
+              summary: "PostgreSQL VPS (this cluster) logged FATAL/PANIC"
+              description: "FATAL/PANIC entries (excluding benign shutdown/disconnect noise and auth failures) in the last 5m. Check the Logs (Loki) row of the PostgreSQL VPS dashboard. Runbook: docs/runbooks/postgres-vps-monitoring.md"
+            labels:
+              severity: critical
+            isPaused: false
+
+          - uid: vps-pg-auth-failures
+            title: VPS Postgres auth failures
+            condition: C
+            data:
+              - refId: A
+                relativeTimeRange:
+                  from: 300
+                  to: 0
+                datasourceUid: loki
+                model:
+                  expr: 'sum by (instance) (count_over_time({job="postgres"} |= "password authentication failed" [5m]))'
+                  queryType: range
+                  datasource:
+                    type: loki
+                    uid: loki
+                  refId: A
+              - refId: C
+                relativeTimeRange:
+                  from: 0
+                  to: 0
+                datasourceUid: __expr__
+                model:
+                  conditions:
+                    - evaluator:
+                        params: [4]
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params: [A]
+                      reducer:
+                        type: last
+                  refId: C
+                  type: classic_conditions
+            noDataState: OK
+            execErrState: Error
+            for: 0s
+            annotations:
+              summary: "PostgreSQL VPS (this cluster) has repeated auth failures"
+              description: "5 or more 'password authentication failed' log lines in 5m (possible brute force or broken credentials). Runbook: docs/runbooks/postgres-vps-monitoring.md"
+            labels:
+              severity: warning
+            isPaused: false
+
+          - uid: vps-pg-logs-absent
+            title: VPS Postgres logs absent
+            condition: C
+            data:
+              - refId: A
+                relativeTimeRange:
+                  from: 900
+                  to: 0
+                datasourceUid: loki
+                model:
+                  expr: 'sum by (instance) (count_over_time({job="postgres"}[15m]))'
+                  queryType: range
+                  datasource:
+                    type: loki
+                    uid: loki
+                  refId: A
+              - refId: C
+                relativeTimeRange:
+                  from: 0
+                  to: 0
+                datasourceUid: __expr__
+                model:
+                  conditions:
+                    - evaluator:
+                        params: [1]
+                        type: lt
+                      operator:
+                        type: and
+                      query:
+                        params: [A]
+                      reducer:
+                        type: last
+                  refId: C
+                  type: classic_conditions
+            noDataState: Alerting
+            execErrState: Error
+            for: 15m
+            annotations:
+              summary: "No PostgreSQL logs from the VPS (this cluster) in Loki"
+              description: "No postgres log lines in 15m; Alloy or the loki-push path is broken (the exporter connects every scrape, so logs normally always flow). Runbook: docs/runbooks/postgres-vps-monitoring.md"
+            labels:
+              severity: warning
+            isPaused: false

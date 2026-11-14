@@ -1,8 +1,10 @@
 # CLAUDE.md -- GoApps Infrastructure Repository
 
 > Single source of truth for Claude Code working on `goapps-infra`.
-> Last updated 2026-10-12: backup destinations, MinIO image source, ArgoCD infra sync policy, disk-pressure incident (see §10, §9, §17).
+> Last updated 2026-11-10: PostgreSQL moved to VPS (one DB per service, `pgbouncer-vps`, systemd backups) -- see §5, §6, §10, §12, §15. Earlier: backup destinations, MinIO image source, ArgoCD infra sync policy (2026-10-12).
 > Read this before making any changes.
+
+> **Current architecture (2026-11):** PostgreSQL no longer runs in the cluster. It runs on a VPS behind `pgbouncer-vps`; the old `postgres` StatefulSet, `pgbouncer`, `postgres-exporter` and `postgres-backup-*` CronJobs were removed from git (P7). Backups run on the VPS via systemd `pg-backup.timer`. See `docs/db-v2-cutover.md` and `docs/runbooks/postgres-vps-monitoring.md`. Sections were updated to this state; remaining mentions of `postgres-0` etc. are marked historical.
 
 ---
 
@@ -67,11 +69,11 @@ Precedence: this CLAUDE.md > external skill. External skills fill gaps and flag 
 This repository manages the Kubernetes infrastructure for the GoApps platform. It runs on **K3s** (lightweight Kubernetes) and uses **Kustomize** for manifest templating, **ArgoCD** for GitOps-based deployment, and a full monitoring stack (Prometheus, Grafana, Loki, Jaeger).
 
 **What this repo controls:**
-- Kubernetes namespaces and base infrastructure (databases, caches, message queues)
+- Kubernetes namespaces and base infrastructure (Redis, RabbitMQ, `pgbouncer-vps` in front of the VPS PostgreSQL)
 - Service deployments for finance-service, iam-service, and frontend
 - Environment overlays for staging and production
 - Monitoring, alerting, logging, and tracing
-- Backup CronJobs for PostgreSQL and MinIO
+- Backup CronJob for MinIO (PostgreSQL backups run on the VPS via systemd, see §10)
 - ArgoCD application definitions for GitOps sync
 - Ingress and TLS configuration (NGINX + wildcard cert)
 
@@ -93,7 +95,7 @@ make install-monitoring     # Install Prometheus/Grafana/Loki stack
 make install-argocd         # Install ArgoCD for GitOps
 
 # Manual Apply (use ArgoCD in production, these are for emergency/initial setup)
-make apply-base             # Apply namespaces + database + backup base configs
+make apply-base             # Apply namespaces + database (redis, rabbitmq, oracle) + backup base configs
 make apply-staging          # Apply base + staging overlays
 make apply-production       # Apply base + production overlays
 
@@ -105,7 +107,6 @@ make deploy-iam-production
 
 # Status and Monitoring
 make status                 # Show nodes, pods (all namespaces), HPA, ArgoCD apps
-make logs-postgres          # Tail PostgreSQL logs
 make logs-argocd            # Tail ArgoCD server logs
 
 # Port Forwarding
@@ -113,7 +114,7 @@ make port-forward-grafana   # Grafana UI on localhost:3000
 make port-forward-argocd    # ArgoCD UI on localhost:8080
 
 # Backup
-make backup-now             # Trigger manual PostgreSQL backup CronJob
+make backup-now             # One-off MinIO disk backup Job (NOT PostgreSQL; see §10)
 
 # Validation
 make lint                   # Dry-run validate all base kustomizations
@@ -153,10 +154,10 @@ kustomize build services/frontend/overlays/production/ | kubectl diff -f -
 # Check cluster state
 kubectl get pods -A                          # All pods across namespaces
 kubectl get pods -n goapps-staging           # Staging app pods
-kubectl get pods -n database                 # Database pods
+kubectl get pods -n database                 # Redis, RabbitMQ, pgbouncer-vps
 kubectl get hpa -A                           # All HorizontalPodAutoscalers
 kubectl get pvc -A                           # All PersistentVolumeClaims
-kubectl get cronjobs -n database             # Backup CronJobs
+kubectl get cronjobs -n database             # MinIO backup CronJob
 
 # Debug a pod
 kubectl describe pod <pod> -n <namespace>
@@ -164,20 +165,14 @@ kubectl logs <pod> -n <namespace>
 kubectl logs <pod> -n <namespace> --previous # Previous container (after crash)
 kubectl top pod <pod> -n <namespace>         # Resource usage
 
-# Database access
-kubectl exec -it postgres-0 -n database -- psql -U postgres -d goapps
-kubectl exec -it postgres-0 -n database -- psql -U postgres -c "SELECT count(*) FROM pg_stat_activity"
-
-# Database access per-environment (single shared postgres-0, not per-service):
-# `goapps` and `ppc_db` are two DATABASES inside the SAME postgres instance --
-# not two servers. One tunnel per environment reaches both; only `-d` changes.
-# | Env        | Pod          | User      | Database | IAM tables schema |
-# | Local      | -            | iam/finance | iam_db/finance_db | public |
-# | Staging    | postgres-0   | stgapps   | goapps / ppc_db | public |
-# | Production | postgres-0   | (check secret) | goapps / ppc_db | public |
-kubectl exec -it postgres-0 -n database -- psql -U stgapps -d goapps -c "SELECT * FROM public.mst_user LIMIT 5;"
-kubectl exec -it postgres-0 -n database -- psql -U stgapps -d goapps -c "\dn"   # list schemas
-kubectl exec -it postgres-0 -n database -- psql -U stgapps -d ppc_db -c "\dt"   # PPC tables
+# Database access (PostgreSQL is on the VPS, not in the cluster; no kubectl exec postgres-0)
+# Per environment: prod 192.168.0.40, staging 192.168.0.60; one instance, one database per service.
+# From the LAN (192.168.0.0/24), sslmode=require; use the <svc>_ro role for read-only queries:
+psql "host=192.168.0.60 port=5432 dbname=iam_db user=iam_ro sslmode=require" -c "SELECT * FROM public.mst_user LIMIT 5;"
+psql "host=192.168.0.60 port=5432 dbname=ppc_db user=ppc_ro sslmode=require" -c "\dt"
+# Or on the VPS itself:
+sudo -u postgres psql -d iam_db -c "SELECT count(*) FROM pg_stat_activity"
+# Databases: iam_db, finance_db, ppc_db (see §5). Passwords: team password manager goapps/<env>/postgres/<role>
 kubectl exec -it deploy/iam-service -n goapps-staging -- /app/migrate -path /app/migrations -database "$DATABASE_URL" up
 
 # Rollback
@@ -221,12 +216,12 @@ argocd app rollback <app-name>
 
 #### PPC setup (`ppc-setup.sh`)
 
-PPC owns a dedicated `ppc_db` database, so it needs an extra `createdb` step the other services do not:
+PPC owns a dedicated `ppc_db` database. On the VPS the databases (`iam_db`, `finance_db`, `ppc_db`) are pre-created with their roles, so the `createdb` step is normally a no-op (new databases: §15 Step 5):
 
 ```bash
 ./scripts/ppc-setup.sh <namespace> [createdb|migrate|seed|all]
 
-./scripts/ppc-setup.sh goapps-staging createdb   # create ppc_db (idempotent; NO deployment needed)
+./scripts/ppc-setup.sh goapps-staging createdb   # no-op on the VPS: DB is pre-created (idempotent)
 ./scripts/ppc-setup.sh goapps-staging migrate    # needs a running ppc-service (image tag read from it)
 ./scripts/ppc-setup.sh goapps-staging seed       # staging/dev only
 ./scripts/ppc-setup.sh goapps-staging all        # createdb + migrate + seed
@@ -252,37 +247,25 @@ goapps-infra/
 │   │   ├── kustomization.yaml
 │   │   └── namespaces.yaml            # database, monitoring, minio, goapps-staging, goapps-production
 │   ├── database/
-│   │   ├── kustomization.yaml         # Aggregates all database components
-│   │   ├── postgres/                  # PostgreSQL 18 StatefulSet
-│   │   │   ├── statefulset.yaml       # 20Gi PVC, custom postgresql.conf
-│   │   │   ├── service.yaml
-│   │   │   ├── configmap.yaml         # Init schemas, postgresql.conf
-│   │   │   ├── vpa.yaml              # VerticalPodAutoscaler
-│   │   │   └── kustomization.yaml
-│   │   ├── pgbouncer/                 # PgBouncer connection pooler
-│   │   │   ├── deployment.yaml
-│   │   │   ├── service.yaml
-│   │   │   ├── configmap.yaml         # Pool config (transaction mode, 100 pool)
-│   │   │   ├── hpa.yaml
-│   │   │   ├── vpa.yaml
-│   │   │   └── kustomization.yaml
+│   │   ├── kustomization.yaml         # Aggregates remaining database components
 │   │   ├── redis/                     # Redis 7 (emptyDir, non-persistent)
 │   │   │   ├── deployment.yaml
 │   │   │   └── kustomization.yaml
 │   │   ├── rabbitmq/                  # RabbitMQ 3 (5Gi PVC, management UI)
 │   │   │   ├── deployment.yaml
 │   │   │   └── kustomization.yaml
-│   │   ├── exporter/                  # PostgreSQL Prometheus exporter
-│   │   │   ├── deployment.yaml
-│   │   │   ├── queries.yaml           # Custom metric queries
-│   │   │   └── kustomization.yaml
 │   │   └── oracle/                    # External Oracle DB references
 │   │       ├── external-services.yaml
 │   │       └── kustomization.yaml
+│   ├── pgbouncer-vps/                 # PgBouncer in front of the VPS PostgreSQL
+│   │   ├── deployment.yaml
+│   │   ├── service.yaml
+│   │   ├── pdb.yaml
+│   │   ├── pgbouncer.ini              # Base; per-env [databases] in overlays/<env>/pgbouncer-vps/
+│   │   └── kustomization.yaml
 │   ├── backup/
 │   │   ├── kustomization.yaml
-│   │   ├── cronjobs/                  # Backup CronJobs
-│   │   │   ├── postgres-backup.yaml   # PostgreSQL 3x/day -> backup disk only
+│   │   ├── cronjobs/                  # Backup CronJobs (MinIO only; PostgreSQL backups are systemd on the VPS)
 │   │   │   ├── minio-backup.yaml      # MinIO app buckets daily -> backup disk
 │   │   │   └── kustomization.yaml
 │   │   ├── minio/                     # MinIO S3 storage (50Gi, TLS, image: ghcr.io/coollabsio/minio -- see §10)
@@ -293,17 +276,20 @@ goapps-infra/
 │   │   ├── helm-values/
 │   │   │   ├── prometheus-stack.yaml  # kube-prometheus-stack Helm values
 │   │   │   └── loki-stack.yaml        # Loki + Promtail Helm values
-│   │   ├── dashboards/                # Grafana dashboard JSON files
+│   │   ├── dashboards/                # Grafana dashboards
 │   │   │   ├── grafana-dashboard-go-apps.json
 │   │   │   ├── grafana-dashboard-go-apps-configmap.yaml
-│   │   │   ├── grafana-dashboard-postgres.json
-│   │   │   ├── grafana-dashboard-postgres-configmap.yaml
+│   │   │   ├── grafana-dashboard-postgres-vps-configmap.yaml   # "PostgreSQL VPS"
 │   │   │   └── grafana-dashboard-loki.json
+│   │   ├── vps-postgres/              # Scrape targets: node-exporter + postgres_exporter on the VPS
+│   │   │   ├── vps-targets.yaml
+│   │   │   └── kustomization.yaml
 │   │   └── alert-rules/               # Grafana/Prometheus alert rules
 │   │       ├── grafana-alert-rules.yaml
 │   │       ├── grafana-alertrules-configmap.yaml
 │   │       ├── complete-alerts.yaml
-│   │       ├── postgres-alerts.yaml
+│   │       ├── postgres-alerts.yaml       # deleteRules only (legacy)
+│   │       ├── postgres-vps-alerts.yaml   # 16 VPS PostgreSQL rules
 │   │       └── kustomization.yaml
 │   ├── observability/
 │   │   └── jaeger/                    # Jaeger all-in-one (OTLP, 10K traces in-memory)
@@ -326,6 +312,8 @@ goapps-infra/
 │
 ├── overlays/                          # Environment-specific overrides for shared infra
 │   ├── staging/
+│   │   ├── pgbouncer-vps/             # pgbouncer.ini ([databases] -> 192.168.0.60) + kustomization
+│   │   ├── vps-postgres/              # VPS exporter scrape targets
 │   │   ├── ingress.yaml               # staging-goapps.mutugading.com
 │   │   ├── backup-patch.yaml         # DEAD -- referenced by no kustomization
 │   │   ├── backup/
@@ -334,6 +322,8 @@ goapps-infra/
 │   │       ├── kustomization.yaml
 │   │       └── minio-patch.yaml
 │   └── production/
+│       ├── pgbouncer-vps/             # pgbouncer.ini ([databases] -> 192.168.0.40)
+│       ├── vps-postgres/
 │       ├── ingress.yaml               # goapps.mutugading.com + Basic Auth on Prometheus
 │       ├── backup-patch.yaml         # DEAD -- referenced by no kustomization
 │       ├── backup/
@@ -446,7 +436,8 @@ goapps-infra/
 │   ├── secrets-env-inventory.md       # Secret keys -> env vars per workload (names only)
 │   └── runbooks/
 │       ├── ppc-service-deployment.md      # New-service deployment, end to end
-│       ├── database-port-forward.md       # Tunnel goapps / ppc_db to localhost
+│       ├── postgres-vps-monitoring.md     # VPS PostgreSQL monitoring/alerts, new-service-DB checklist
+│       ├── database-port-forward.md       # (legacy) tunnel to the old in-cluster DB
 │       └── monitoring-alerting-activation-2026-07.md
 │
 └── .github/
@@ -472,13 +463,14 @@ goapps-infra/
 | ArgoCD Sync | Automatic (prune + selfHeal) | Manual approval required |
 | Service Replicas | 1 | 3 |
 | Resource Limits | Lower (dev-friendly) | Higher (production-grade) |
-| Backup Paths | `/staging-goapps-backup/` | `/goapps-backup/` |
+| PostgreSQL VPS | `192.168.0.60` | `192.168.0.40` |
+| MinIO Backup Paths | `/staging-goapps-backup/` | `/goapps-backup/` |
 
 ### Namespace Layout
 
 | Namespace | Purpose |
 |-----------|---------|
-| `database` | PostgreSQL, PgBouncer, Redis, RabbitMQ, exporters |
+| `database` | `pgbouncer-vps`, Redis, RabbitMQ (PostgreSQL itself runs on the VPS) |
 | `monitoring` | Prometheus, Grafana, Loki, Promtail |
 | `observability` | Jaeger distributed tracing |
 | `minio` | MinIO S3-compatible object storage |
@@ -497,50 +489,61 @@ goapps-infra/
 
 ## 5. Database Architecture
 
-### PostgreSQL 18
+### PostgreSQL 18 (on VPS, outside Kubernetes)
 
-- **Type**: StatefulSet (single pod)
-- **Storage**: 20Gi PersistentVolumeClaim
-- **Access**: `postgres.database.svc.cluster.local:5432` (internal only)
-- **Schemas**: **every application table lives in `public`.** `base/database/postgres/configmap.yaml` (`init-schemas.sql`) does create four extra schemas — `export`, `auth`, `hr`, `finance` — but they are **empty**: no migration in `goapps-backend/services/*/migrations/postgres/` issues a `CREATE SCHEMA` or a schema-qualified `CREATE TABLE`. Do not assume a table is reachable as `finance.x` or `hr.x`; qualify with `public.` or nothing at all. (The `finance.*` / `hr.*` strings that appear in IAM migrations are **permission codes**, e.g. `finance.cost.caljob.create` — not schema names.)
+PostgreSQL 18.4 runs on dedicated VPS hosts, not in the cluster (the in-cluster StatefulSet was removed in P7, 2026-11-10; history in `docs/db-v2-cutover.md`).
+
+| Env | Host | Resources |
+|-----|------|-----------|
+| Production | `192.168.0.40` | 8 vCPU / 15 Gi |
+| Staging | `192.168.0.60` | 4 vCPU / 7.7 Gi |
+
+- **Data**: `/psqldb/postgresql/18/main`; **backup disk**: `/psqldb-backup` (see §10)
+- **Security**: TLS (`hostssl`, scram-sha-256); `pg_hba.conf` allows only the LAN `192.168.0.0/24`, per database and per role
 - **Timezone**: `Asia/Jakarta`
+- **Config**: `/etc/postgresql/18/main/conf.d/90-goapps.conf` on the VPS, changed by the infra team via ssh + `systemctl reload postgresql` -- not via a ConfigMap
+- **Schemas**: every application table lives in `public`. The `finance.*` / `hr.*` strings in IAM migrations are **permission codes**, not schema names.
 
-Key configuration (`configmap.yaml`):
+### One database per service
 
-| Setting | Value | Purpose |
-|---------|-------|---------|
-| `max_connections` | 200 | PgBouncer pooling + direct; raised for the Phase C calc engine |
-| `shared_buffers` | 1GB | Shared page cache |
-| `effective_cache_size` | 3GB | Planner hint |
-| `work_mem` | 16MB | Per-operation sort/hash memory |
-| `maintenance_work_mem` | 512MB | VACUUM, CREATE INDEX |
-| `wal_buffers` | 16MB | WAL staging |
-| `max_wal_size` | 1GB | Checkpoint spacing |
+Per goapps-backend ADR `docs/adr/0001-one-database-per-service.md`:
 
-> Values above are read straight from `base/database/postgres/configmap.yaml`. The table in
-> `RULES.md` ("Database Management → PostgreSQL Configuration") is **stale** — it still lists
-> 150 / 256MB / 128MB. Treat the configmap as the source of truth.
+| Service | Database | Roles |
+|---------|----------|-------|
+| IAM | `iam_db` | `iam_owner`, `iam_app`, `iam_ro` |
+| Finance | `finance_db` | `finance_owner`, `finance_app`, `finance_ro` |
+| PPC | `ppc_db` | `ppc_owner`, `ppc_app`, `ppc_ro` |
 
-### PgBouncer (Connection Pooler)
+- `<svc>_owner` owns the objects; used for migrations/seeds only, **direct** to the VPS IP `:5432` with `sslmode=require`.
+- `<svc>_app` is the runtime role (DML only), connects through `pgbouncer-vps`.
+- `<svc>_ro` is the read-only group for ad-hoc queries.
+- Migration table is `schema_migrations_<svc>`. No cross-service SQL -- use gRPC. Never use a superuser from apps.
 
-- **Mode**: Transaction pooling
-- **Pool size**: 100 connections
-- **Access**: `pgbouncer.database.svc.cluster.local:5432`
-- **HPA**: Enabled
-- **VPA**: Enabled
+### PgBouncer (`pgbouncer-vps`)
 
-**All services on the shared `goapps` database MUST connect via PgBouncer, never directly to PostgreSQL.**
+- **Deployment + Service** `pgbouncer-vps` in namespace `database`: `pgbouncer-vps.database.svc.cluster.local:5432`
+- **Mode**: transaction pooling, `max_prepared_statements=200`; auth scram via secret `pgbouncer-vps-userlist`
+- **TLS**: app -> PgBouncer is in-cluster plain (`DATABASE_SSLMODE=disable`, `client_tls_sslmode=disable`); PgBouncer -> VPS uses TLS (`server_tls_sslmode=require`)
+- **Manifests**: `base/pgbouncer-vps/` + `overlays/{staging,production}/pgbouncer-vps/pgbouncer.ini` (`[databases]` = `iam_db`, `finance_db`, `ppc_db` -> VPS IP); ArgoCD apps `argocd/apps/{staging,production}/infra-pgbouncer-vps.yaml`
+- **Pool sizes**: edit `overlays/<env>/pgbouncer-vps/pgbouncer.ini`, then ArgoCD sync
 
-**Documented exception — PPC.** PgBouncer is configured with `DB_NAME: goapps` and no `[databases]` block, so it cannot front `ppc_db` at all. `ppc-service` therefore connects directly to `postgres.database.svc.cluster.local:5432` (see `services/ppc-service/base/deployment.yaml`). This is acceptable because PPC's HPA is pinned `minReplicas: 1 / maxReplicas: 1`, capping its connection count. If PPC is ever scaled past 1 replica, add a `[databases]` entry for `ppc_db` to PgBouncer first.
+Services connect via PgBouncer at runtime; only migrate/seed jobs and admin tools go direct to the VPS.
 
 ```yaml
-# CORRECT
-DATABASE_HOST: "pgbouncer.database.svc.cluster.local"
+# Service overlay (runtime)
+DATABASE_HOST: "pgbouncer-vps.database.svc.cluster.local"
 DATABASE_PORT: "5432"
-
-# WRONG -- never do this in services
-DATABASE_HOST: "postgres.database.svc.cluster.local"
+DATABASE_NAME: "iam_db"
+DATABASE_USER: "iam_app"
+DATABASE_SSLMODE: "disable"     # PPC uses the PPC_ prefix for these variables
 ```
+
+Passwords come from per-service secrets `iam-db-secret`, `finance-db-secret`, `ppc-db-secret` (see §12). Local K3s overlay is the exception: it uses an in-cluster `postgres-v2.database.svc.cluster.local` (local only, `sslmode=disable`).
+
+### Admin access
+
+There is no `kubectl exec postgres-0`. Use psql/DataGrip from the LAN (`192.168.0.0/24`) with `sslmode=require` to `192.168.0.40` (prod) / `192.168.0.60` (staging) as the role you need (passwords in the team password manager `goapps/<env>/postgres/<role>`), or on the VPS run `sudo -u postgres psql -d <svc>_db`. Use `<svc>_ro` for read-only queries.
+
 
 ### Redis 7
 
@@ -556,24 +559,9 @@ DATABASE_HOST: "postgres.database.svc.cluster.local"
 - **Management UI**: Port 15672
 - **Note**: Single pod (no clustering) -- single point of failure risk
 
-### Adding a New Schema
+### Adding a New Database or Schema
 
-> **Rarely what you want.** The platform does not actually use per-module schemas — all tables
-> are in `public` (see "Schemas" above), and `init-schemas.sql` only runs on **first initdb** of an
-> empty data directory, so editing it does nothing to an existing volume. Prefer a plain migration.
-
-Edit `base/database/postgres/configmap.yaml` and add to `init-schemas.sql`:
-
-```sql
-CREATE SCHEMA IF NOT EXISTS new_schema;
-GRANT ALL PRIVILEGES ON SCHEMA new_schema TO postgres;
-```
-
-Then restart PostgreSQL (data is preserved):
-
-```bash
-kubectl rollout restart statefulset/postgres -n database
-```
+Each service gets its own database, not a new schema -- follow §15 Step 5. Schemas other than `public` are not used; use a plain migration for anything inside a service database.
 
 ---
 
@@ -594,9 +582,13 @@ Installed via Helm charts. Configuration in `base/monitoring/helm-values/`.
 - **SMTP**: Configured for email alerts
 - **Dashboards** (auto-loaded via sidecar with `grafana_dashboard: "1"` label):
   - GoApps Service Dashboard (`grafana-dashboard-go-apps.json`)
-  - PostgreSQL Dashboard (`grafana-dashboard-postgres.json`)
+  - PostgreSQL VPS (`grafana-dashboard-postgres-vps-configmap.yaml`)
   - Loki Log Dashboard (`grafana-dashboard-loki.json`)
 - **Datasources**: Prometheus + Loki — managed EXCLUSIVELY via Helm values (`grafana.additionalDataSources` in `helm-values/prometheus-stack.yaml`); never apply datasource ConfigMaps (see INFRA_STABILITY_GUIDE.md)
+
+### PostgreSQL on the VPS
+
+PostgreSQL is outside the cluster, so metrics come from `node-exporter` and `postgres_exporter` running on each VPS (prod `192.168.0.40`, staging `192.168.0.60`). They are scraped via `base/monitoring/vps-postgres/` (`vps-targets.yaml`) with overlays in `overlays/{staging,production}/vps-postgres/`. Dashboard: **PostgreSQL VPS**; alerts: `postgres-vps-alerts.yaml`. Runbook and the "new service DB" monitoring checklist: `docs/runbooks/postgres-vps-monitoring.md`.
 
 ### Loki + Promtail
 
@@ -608,7 +600,8 @@ Installed via Helm charts. Configuration in `base/monitoring/helm-values/`.
 
 Located in `base/monitoring/alert-rules/`. Only these are in `kustomization.yaml`:
 - `complete-alerts.yaml` -- Comprehensive alert set (Grafana **unified-alerting** rules, keyed by `title:`, not Prometheus `alert:` rules)
-- `postgres-alerts.yaml` -- PostgreSQL-specific alerts (includes a `ppc_db` deadlock rule alongside the `goapps` one)
+- `postgres-alerts.yaml` -- legacy in-cluster PostgreSQL rules; now only carries Grafana `deleteRules` (can be deleted once both environments picked it up)
+- `postgres-vps-alerts.yaml` -- PostgreSQL on the VPS, 16 rules: PG down, node exporter down, backup stale/failed, disk >80%, connections >80%, tx >5m, idle-in-tx >5m, deadlocks, restore test failed/overdue, memory >90%, disk full in 7d, iowait >30%, PG restarted, exporter scrape error, swap >50%, table bloat
 - `cost-calc-alerts.yaml` -- finance-cost-worker specific
 - `grafana-alertrules-configmap.yaml` -- `deleteRules:` tombstone; do not remove, do not extend
 
@@ -706,9 +699,9 @@ KubeDeploymentReplicasMismatch, PodOOMKilled, PodRestartingTooOften, HPAMaxedOut
 
 Any Deployment in `goapps-staging` / `goapps-production` inherits all of them the moment it exists. **Silence after a rollout means the rollout succeeded** — these rules fire only on `CrashLoopBackOff`, `Pending`, unavailable replicas, or OOMKills. The email flood people associate with "a new image went out" is the signature of a *failing* rollout, not a routine notification. Do not read a quiet inbox as missing coverage.
 
-Only genuinely service-specific alerts need authoring. Note that `postgres-alerts.yaml` currently carries **only one** `ppc_db`-specific rule — `postgres-deadlocks-ppc` ("PostgreSQL Deadlocks Detected (ppc_db)"). There are **no** `ppc_db` size, connection-count, or backup rules; an earlier version of this doc claimed there were.
+Only genuinely service-specific alerts need authoring. PostgreSQL alerts live in `postgres-vps-alerts.yaml` (see "PostgreSQL on the VPS" above); the old `ppc_db` deadlock rule from `postgres-alerts.yaml` is covered by its deadlock rule.
 
-⚠️ **`grafana-alert-rules.yaml` is NOT in `alert-rules/kustomization.yaml`** — only `complete-alerts`, `grafana-alertrules-configmap`, `postgres-alerts`, `cost-calc-alerts` are applied. It appears to be a superseded copy of `grafana-alertrules-configmap.yaml`. Left in place deliberately: **never delete, rename, regenerate, or reformat Grafana alert config** — this configuration was lost once before and had to be rebuilt from scratch. Never add a uid to `deleteRules:`.
+⚠️ **`grafana-alert-rules.yaml` is NOT in `alert-rules/kustomization.yaml`** — only `complete-alerts`, `grafana-alertrules-configmap`, `postgres-alerts` (deleteRules only), `postgres-vps-alerts`, `cost-calc-alerts`, `erp-integration-alerts` are applied. It appears to be a superseded copy of `grafana-alertrules-configmap.yaml`. Left in place deliberately: **never delete, rename, regenerate, or reformat Grafana alert config** — this configuration was lost once before and had to be rebuilt from scratch. Never add a uid to `deleteRules:`.
 
 ---
 
@@ -821,7 +814,7 @@ Located in `argocd/apps/`:
 
 | Application | Path | Sync Policy |
 |-------------|------|-------------|
-| `infra-database` (in `argocd/apps/shared/infra-apps.yaml`) | `base/database` | Auto |
+| `infra-database` (in `argocd/apps/shared/infra-apps.yaml`) | `base/database` (redis, rabbitmq, oracle refs) | Auto |
 | `infra-observability` (in `argocd/apps/shared/infra-apps.yaml`) | `base/observability/jaeger` | Auto |
 | `finance-service-staging` | `services/finance-service/overlays/staging` | Auto (prune + selfHeal) |
 | `iam-service-staging` | `services/iam-service/overlays/staging` | Auto (prune + selfHeal) |
@@ -835,6 +828,8 @@ Located in `argocd/apps/`:
 | `infra-minio` (staging cluster) | `overlays/staging/minio` | Auto (prune + selfHeal) |
 | `infra-backup` (production cluster) | `overlays/production/backup` | **Auto (prune + selfHeal)** |
 | `infra-minio` (production cluster) | `overlays/production/minio` | **Auto (prune + selfHeal)** |
+| `infra-pgbouncer-vps` (staging cluster) | `overlays/staging/pgbouncer-vps` | Auto (prune + selfHeal) |
+| `infra-pgbouncer-vps` (production cluster) | `overlays/production/pgbouncer-vps` | Auto (prune + selfHeal) |
 
 ⚠️ **The infra backup/MinIO Applications are auto-sync on production too** (`argocd/apps/production/infra-{backup,minio}.yaml`), and are named `infra-backup` / `infra-minio` in *both* clusters -- no `-staging`/`-production` suffix. A merge to `main` touching `base/backup/` or the backup/minio overlays reaches production within ~3 min **without** a manual sync, so test those changes on staging first. It also means a `kubectl edit` on a backup CronJob is reverted by selfHeal -- change it in git. An earlier version of this table listed the production ones as Manual.
 
@@ -877,77 +872,53 @@ retry:
 
 ## 10. Backup Strategy
 
-| Target | Frequency | Schedule (WIB) | Retention | Destinations |
+| Target | Frequency | Schedule (WIB) | Retention | Destination |
 |--------|-----------|----------------|-----------|-------------|
-| PostgreSQL | 3x daily | 04:00, 12:00, 20:00 (low-traffic, 8h apart) | 7 days | **Dedicated backup disk only** (+ Backblaze B2 only if the optional `s3-cloud-credentials` secret exists) |
-| MinIO app buckets (`export-files`, `goapps-{env}`) | Daily | 03:00 | Mirror (no prune) | Dedicated backup disk |
+| PostgreSQL (VPS, systemd `pg-backup.timer`) | 3x daily | 04:00, 12:00, 20:00 | 7 days | `/psqldb-backup/postgres/<YYYYMMDD_HHMMSS>/` on each VPS (prod `.40`, staging `.60`) |
+| PostgreSQL restore test (`pg-restore-test.timer`) | Weekly | Sun 06:00 | n/a | scratch DB on the same VPS |
+| MinIO app buckets (`export-files`, `goapps-{env}`) | Daily | 03:00 | Mirror (no prune) | Dedicated backup disk (K8s CronJob `minio-backup-to-disk`) |
 
-**Backup disk** = a separate block device mounted at `/goapps-backup` (production, `sdb`) / `/staging-goapps-backup` (staging). It is **not** the root disk that holds the PVCs.
+**PostgreSQL backups are not in Kubernetes any more** (P7, 2026-11-10). The `postgres-backup-*` CronJobs, the `postgres-backups` MinIO bucket and the Postgres part of the K8s backup overlays are gone. Each VPS runs systemd timers; the scripts/units come from the goapps workspace `docs/migration-postgres/v2/vps/` (outside this repo).
 
-**Postgres dumps no longer go to MinIO** (both envs, since 2026-10-08/12). Both backup overlays blank `MINIO_ENDPOINT` for the three postgres CronJobs, so `backup.sh` skips the MinIO upload and prune, and `postgres-backups` is dropped from `MINIO_BUCKETS`. Reason: the `postgres-backups` bucket lived inside the MinIO PVC on the **root** disk; at ~24G it pushed production into DiskPressure (see §17). The bucket is left empty, not deleted.
+### PostgreSQL backup (VPS)
 
-**Backblaze B2 is optional and silent.** The `S3_*` env vars use `optional: true` secret refs, so with no `s3-cloud-credentials` secret the upload is skipped with no log line and no error. Do not assume an off-host copy exists -- check `kubectl get secret s3-cloud-credentials -n database` and look for `Uploaded to Cloud S3` in a job log.
+- `pg-backup.timer` runs `/usr/local/sbin/pg-backup`: `pg_dump --format=custom --compress=zstd:3`, one file per DB (`iam_db`, `finance_db`, `ppc_db`) plus globals, into `/psqldb-backup/postgres/<YYYYMMDD_HHMMSS>/`.
+- Each dump is verified; a good run logs `VERIFY OK` in the journal. Retention is 7 days and is skipped when a run is degraded.
+- `pg-restore-test.timer` (Sun 06:00 WIB) runs `/usr/local/sbin/pg-restore-test`: restores the latest dump into a scratch DB and logs `RESTORE TEST PASSED`.
+- Alerts for backup age/failure and restore-test failed/overdue live in `postgres-vps-alerts.yaml` (see §6).
+- Archives of the final in-cluster databases: `/psqldb-backup/archive/k8s-final-*` on `.40`/`.60`, kept at least 90 days (until about 2027-02-10).
+
+### Verification (on the VPS, weekly)
+
+```bash
+systemctl list-timers 'pg-*'                      # next/last run of pg-backup and pg-restore-test
+journalctl -u pg-backup.service -n 50             # look for "VERIFY OK" per DB
+journalctl -u pg-restore-test.service -n 50       # look for "RESTORE TEST PASSED"
+ls -lt /psqldb-backup/postgres | head             # newest dump directory is recent
+df -h /psqldb-backup                              # backup disk headroom
+```
+
+For a manual run, ssh to the VPS and `sudo systemctl start pg-backup.service`; do not start it next to a scheduled run (04:00/12:00/20:00 WIB).
+
+### MinIO backup (Kubernetes)
+
+**Backup disk** = a separate block device mounted at `/goapps-backup` (production) / `/staging-goapps-backup` (staging), not the root disk that holds the PVCs. Defined in `base/backup/cronjobs/minio-backup.yaml` (`minio-backup-to-disk`, daily 03:00 WIB), applied through the `infra-backup` Application.
+
+```bash
+make backup-now     # one-off Job from minio-backup-to-disk (MinIO data only -- NOT PostgreSQL)
+kubectl get cronjobs -n database
+kubectl get jobs -n database                  # anything not Complete is a problem
+kubectl get pods -n database | grep -E 'ImagePull|Init:|Error'   # must be empty
+```
+
+Guards on the CronJob: `activeDeadlineSeconds` (2h) so a stuck Job turns Failed instead of blocking later schedules under `concurrencyPolicy: Forbid`, and `startingDeadlineSeconds: 3600` so a missed run is skipped rather than fired late. Never delete a running backup Job to "clean up".
 
 ### MinIO image source
 
-Every MinIO reference (`base/backup/minio/deployment.yaml`, the `copy-mc` init container in the three postgres CronJobs, `minio-backup.yaml`, `minio-ilm-setup.yaml`) uses
-`ghcr.io/coollabsio/minio:RELEASE.2025-10-15T17-29-55Z@sha256:69b55a1c...` -- an anonymous public rebuild of the upstream AGPL release with the same layout as the old `minio/minio` (`/usr/bin/minio`, `/usr/bin/mc`, `sh`, `cp`), so it also serves as the `mc` image. It is pinned by digest because it is a **third-party mirror**; the planned follow-up is to copy it to `ghcr.io/mutugading/minio` and point there. Do **not** switch to `quay.io/minio/aistor/*` (commercial AIStor) or `cgr.dev/chainguard/minio` (non-root, no shell/`cp` -- breaks `copy-mc`) without reworking the manifests.
+Every MinIO reference (`base/backup/minio/deployment.yaml`, `minio-backup.yaml`, `minio-ilm-setup.yaml`) uses
+`ghcr.io/coollabsio/minio:RELEASE.2025-10-15T17-29-55Z@sha256:69b55a1c...` -- an anonymous public rebuild of the upstream AGPL release with the same layout as the old `minio/minio` (`/usr/bin/minio`, `/usr/bin/mc`, `sh`, `cp`), so it also serves as the `mc` image. It is pinned by digest because it is a **third-party mirror**; the planned follow-up is to copy it to `ghcr.io/mutugading/minio` and point there. Do **not** switch to `quay.io/minio/aistor/*` (commercial AIStor) or `cgr.dev/chainguard/minio` (non-root, no shell/`cp`) without reworking the manifests.
 
-### Backup CronJobs
-
-Defined in `base/backup/cronjobs/`:
-- `postgres-backup.yaml` -- Three CronJobs (morning, afternoon, evening)
-- `minio-backup.yaml` -- Daily MinIO bucket backup
-
-Guards on every backup CronJob (added 2026-10-12, see §17):
-- `activeDeadlineSeconds` -- 3h postgres / 2h minio mirror. A Job that cannot finish (e.g. `ImagePullBackOff`) turns **Failed** instead of sitting "Running" forever. With `concurrencyPolicy: Forbid`, a forever-Running Job silently skips every later schedule.
-- `startingDeadlineSeconds: 3600` -- a run missed by more than 1h is skipped, not fired late. Stops several CronJobs firing catch-up runs at once.
-- Dump filename = `${ENVIRONMENT}_{goapps,ppc_db}_<YYYYmmdd_HHMMSS>_<pod-hash>.sql.gz`. The pod-hash suffix keeps concurrent runs from ever sharing a file; older files have no suffix. Prefix globs (`*_goapps_*`) and `ls -t` ordering still work.
-- A dump is considered good only when the log shows `VERIFY OK ... completion marker present` and the job ends `Backup completed successfully!`. Local retention (`find -mtime +7 -delete`) runs **only** after a fully successful run, so a run of failures also means old files pile up.
-
-### Manual Backup
-
-```bash
-make backup-now
-# Creates a one-off Job from the morning CronJob template
-```
-
-Manual-run pitfalls (all hit on 2026-10-12):
-- **Never delete a running backup Job** to "clean up" -- the pod is killed mid-`pg_dump` and leaves a truncated `.sql.gz` (no shell trap removes it). Check with `gzip -t`; delete only files that fail it.
-- `kubectl logs -f` right after `create job` fails with `PodInitializing` while the `copy-mc` init container runs -- wait with `kubectl wait --for=condition=Ready pod -l job-name=<job>` first. A `failed to create fsnotify watcher: too many open files` from `logs -f` is the **host's** inotify limit, not the backup; raised on production via `/etc/sysctl.d/99-inotify.conf` (`max_user_instances=512`, `max_user_watches=524288`).
-- Do not start a manual run next to a scheduled one (04:00/12:00/20:00 WIB) -- two `pg_dump`s double the load on `postgres-0`. A production `goapps` dump took ~37 min at 1.8G (2026-10-12) and grows ~0.5G per 10 days.
-
-### Backup Verification (Weekly Checklist)
-
-```bash
-kubectl get cronjobs -n database              # Check schedules and last run
-kubectl get jobs -n database                  # Check recent job status -- anything not Complete is a problem
-kubectl get pods -n database | grep -E 'ImagePull|Init:|Error'   # must be empty
-gzip -t "$(ls -t /goapps-backup/postgres/*_goapps_*.sql.gz | head -1)" && echo OK   # newest dump is intact
-find /goapps-backup/postgres -name '*.sql.gz' -mtime +7 | wc -l                     # 0 = retention is running
-# MinIO bucket `postgres-backups` should stay at 0B (dumps are no longer uploaded)
-# Backblaze B2 console -- only if s3-cloud-credentials exists (see above)
-# Check VPS disk (path differs per host -- see note below):
-#   production: ls -la /goapps-backup/postgres/
-#   staging:    ls -la /staging-goapps-backup/postgres/
-```
-
-### Restore Testing (Monthly)
-
-```bash
-# 1. Get latest backup
-BACKUP=$(ls -t /staging-goapps-backup/postgres/*.sql.gz | head -1)   # staging; production uses /goapps-backup/postgres
-
-# 2. Create test database
-kubectl exec -it postgres-0 -n database -- psql -U postgres -c "CREATE DATABASE goapps_restore_test"
-
-# 3. Restore
-kubectl exec -it postgres-0 -n database -- bash -c "gunzip -c ${BACKUP} | psql -U postgres -d goapps_restore_test"
-
-# 4. Verify tables exist and have data
-# 5. Drop test database
-kubectl exec -it postgres-0 -n database -- psql -U postgres -c "DROP DATABASE goapps_restore_test"
-```
+**Backblaze B2 is optional and silent.** The `S3_*` env vars use `optional: true` secret refs, so without an `s3-cloud-credentials` secret any cloud upload is skipped with no log line. Do not assume an off-host copy exists.
 
 ---
 
@@ -997,11 +968,14 @@ Production checks are stricter (exit 1 on failures vs warnings for staging).
 ### Creating Secrets in Cluster
 
 ```bash
-# PostgreSQL
-kubectl create secret generic postgres-secret -n database \
-  --from-literal=POSTGRES_USER='postgres' \
-  --from-literal=POSTGRES_PASSWORD='<password>' \
-  --from-literal=POSTGRES_DB='goapps'
+# Per-service DB credentials (PostgreSQL runs on the VPS; roles created there, see §15 Step 5)
+kubectl create secret generic iam-db-secret -n goapps-staging \
+  --from-literal=APP_USER='iam_app' \
+  --from-literal=APP_PASSWORD='<password from team password manager goapps/<env>/postgres/iam_app>' \
+  --from-literal=OWNER_USER='iam_owner' \
+  --from-literal=OWNER_PASSWORD='<password from goapps/<env>/postgres/iam_owner>'
+# Same pattern for finance-db-secret, ppc-db-secret. pgbouncer-vps-userlist (namespace database)
+# holds the scram userlist for the *_app roles.
 
 # JWT Auth
 kubectl create secret generic goapps-auth-secret -n goapps-staging \
@@ -1028,7 +1002,6 @@ kubectl create secret generic minio-secret -n minio \
 
 | Secret | Namespace(s) | Keys |
 |--------|-------------|------|
-| `postgres-secret` | `database` | POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB |
 | `goapps-auth-secret` | `goapps-staging`, `goapps-production` | JWT_ACCESS_SECRET, JWT_REFRESH_SECRET |
 | `goapps-tls` | multiple | tls.crt, tls.key (wildcard cert) |
 | `ghcr-secret` | `goapps-staging`, `goapps-production` | .dockerconfigjson |
@@ -1038,7 +1011,8 @@ kubectl create secret generic minio-secret -n minio \
 | `goapps-internal-token` | `goapps-staging`, `goapps-production` | INTERNAL_SERVICE_TOKEN |
 | `ppc-internal-token` | `goapps-staging`, `goapps-production` | PPC_INTERNAL_TOKEN |
 | `oracle-credentials` | `goapps-staging`, `goapps-production` | ORACLE_HOST, ORACLE_PORT, ORACLE_SERVICE, ORACLE_USER, ORACLE_PASSWORD, ORACLE_MGTHRIS_USER/PASSWORD, ORACLE_MGTAPPS_USER/PASSWORD, ORACLE_MGTDAT_USER/PASSWORD (production-verified; HRIS = MGTHRIS) |
-| `finance-db-secret`, `iam-db-secret`, `ppc-db-secret` | `goapps-staging` | APP_USER, APP_PASSWORD (per-service app role; production still uses `postgres-secret`) |
+| `finance-db-secret`, `iam-db-secret`, `ppc-db-secret` | `goapps-staging`, `goapps-production` | APP_USER, APP_PASSWORD (runtime role `<svc>_app`, via `pgbouncer-vps`), OWNER_USER, OWNER_PASSWORD (`<svc>_owner`, migrate/seed jobs, direct to the VPS) |
+| `pgbouncer-vps-userlist` | `database` | userlist with scram verifiers for the `<svc>_app` roles (PgBouncer auth) |
 | `goapps-chat-secret` | `goapps-staging`, `goapps-production` | CHAT_MASTER_KEY |
 | `rabbitmq-secret` | `database`, `goapps-staging`, `goapps-production` | RABBITMQ_USER, RABBITMQ_PASSWORD |
 | `smtp-secret` | `goapps-staging`, `goapps-production` | SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, SMTP_FROM_ADDRESS |
@@ -1055,8 +1029,8 @@ env:
   - name: DATABASE_PASSWORD
     valueFrom:
       secretKeyRef:
-        name: postgres-secret
-        key: POSTGRES_PASSWORD
+        name: iam-db-secret      # per-service DB secret (finance-db-secret, ppc-db-secret, ...)
+        key: APP_PASSWORD
 ```
 
 ---
@@ -1106,6 +1080,13 @@ kubectl apply --dry-run=client -k base/database/
 trivy config --severity CRITICAL,HIGH .
 ```
 
+### Alat Validasi
+
+- **Versi yang direkomendasikan (sama dengan CI):** kustomize v5.3.0 (`KUSTOMIZE_VERSION` di `ci.yml`), kubeconform v0.6.7, actionlint 1.7.1. Cek dengan `command -v`, jangan `find /`.
+- **Pasang:** `scripts/install-infra-tools.sh` (default ke `~/.local/bin`, override dengan `BIN_DIR`; checksum SHA256 diverifikasi). Mendukung Linux dan macOS (amd64/arm64). Skrip tidak mengubah rc file; kalau `BIN_DIR` belum ada di `PATH`, skrip mencetak instruksi `export PATH=...`.
+- **Validasi manifest:** `kustomize build <overlay> | kubeconform -strict -summary`
+- **Validasi workflow:** `actionlint`
+
 ### CI Validation
 
 The CI pipeline (`ci.yml`) runs three validation jobs on every push/PR:
@@ -1122,15 +1103,15 @@ The CI pipeline (`ci.yml`) runs three validation jobs on every push/PR:
 | Resource | Pattern | Examples |
 |----------|---------|---------|
 | Namespace | `<purpose>` or `<app>-<env>` | `database`, `monitoring`, `goapps-staging` |
-| Deployment | `<service-name>` | `finance-service`, `frontend`, `pgbouncer` |
-| StatefulSet | `<app-name>` | `postgres`, `rabbitmq` |
-| Service | `<deployment-name>` | `finance-service`, `postgres`, `redis` |
-| ConfigMap | `<app>-config` | `postgres-config`, `grafana-config` |
-| Secret | `<app>-secret` | `postgres-secret`, `minio-secret` |
-| HPA | `<deployment>-hpa` | `finance-service-hpa`, `pgbouncer-hpa` |
-| VPA | `<deployment>-vpa` | `postgres-vpa`, `pgbouncer-vpa` |
-| PVC | `<app>-data` | `postgres-data`, `grafana-data` |
-| CronJob | `<purpose>-<schedule>` | `postgres-backup-morning`, `minio-backup-daily` |
+| Deployment | `<service-name>` | `finance-service`, `frontend`, `pgbouncer-vps` |
+| StatefulSet | `<app-name>` | `rabbitmq` |
+| Service | `<deployment-name>` | `finance-service`, `pgbouncer-vps`, `redis` |
+| ConfigMap | `<app>-config` | `pgbouncer-vps-config`, `grafana-config` |
+| Secret | `<app>-secret` / `<svc>-db-secret` | `minio-secret`, `iam-db-secret` |
+| HPA | `<deployment>-hpa` | `finance-service-hpa` |
+| VPA | `<deployment>-vpa` | `<deployment>-vpa` (VPA CRD required) |
+| PVC | `<app>-data` | `rabbitmq-data`, `grafana-data` |
+| CronJob | `<purpose>-<schedule>` | `minio-backup-to-disk` |
 | Ingress | `<app>-ingress` | `grafana-ingress`, `argocd-ingress` |
 | ServiceMonitor | `<service>-monitor` | `finance-service-monitor` |
 
@@ -1222,9 +1203,19 @@ Include ArgoCD Image Updater annotations for automatic image tag updates.
 
 Committing the file is **not** enough to create the Application -- see Step 8.
 
-### Step 5: Add Database Schema (If Needed)
+### Step 5: Add the Service Database (One Database per Service)
 
-Edit `base/database/postgres/configmap.yaml` to add the new schema.
+Each service gets its own database `<svc>_db` on the VPS PostgreSQL (goapps-backend ADR `docs/adr/0001-one-database-per-service.md`). There is no in-cluster Postgres and no shared schema to edit. Checklist (per environment, staging first):
+
+1. On the VPS (`192.168.0.60` staging / `192.168.0.40` prod): create roles `<svc>_owner` (migrations/seeds only), `<svc>_app` (runtime, DML only), `<svc>_ro` (read-only group); create `<svc>_db` owned by `<svc>_owner`; grant on schema `public` only.
+2. `pg_hba.conf`: add `hostssl` lines for the new DB/roles from the LAN `192.168.0.0/24` (scram-sha-256), then `systemctl reload postgresql`.
+3. Secret `<svc>-db-secret` in the app namespace (see §12), plus a new line in the `pgbouncer-vps-userlist` secret for `<svc>_app`.
+4. Add `<svc>_db` to `[databases]` in `overlays/{staging,production}/pgbouncer-vps/pgbouncer.ini` and let ArgoCD sync `infra-pgbouncer-vps`.
+5. Service overlay sets `DATABASE_HOST=pgbouncer-vps.database.svc.cluster.local`, `DATABASE_PORT`, `DATABASE_NAME`, `DATABASE_USER`, `DATABASE_SSLMODE=disable` (in-cluster hop to PgBouncer; PgBouncer-to-VPS is TLS `require`); migrate/seed jobs use the owner role direct to the VPS IP with `?sslmode=require&x-migrations-table=schema_migrations_<svc>`.
+6. Monitoring: follow the "new service DB" checklist in `docs/runbooks/postgres-vps-monitoring.md`.
+7. Verify the migration afterwards as `<svc>_ro` (or the owner) from the LAN with `psql`, e.g. `SELECT version, dirty FROM schema_migrations_<svc>;`.
+
+Steps 1-2 and the VPS part of step 6 are automated by `scripts/postgres/new-service-db.sh <svc> --target staging|production` (run on the VPS; dry-run unless `--apply`; see `scripts/postgres/README.md`). It prints the step 3-4 follow-ups (secrets, `pgbouncer-vps` entries, dashboard/alert regexes). CI job `db-guard` (`scripts/ci/check-db-overlays.sh`) fails a PR whose overlay points at the wrong host, DB, secret or env IP.
 
 ### Step 6: Add to Sync Workflow
 
@@ -1263,15 +1254,16 @@ This bit `ppc-service` on 2026-07-29 in **both** environments. It is the same cl
 
 ### Step 9: Migrate IAM too -- the menu and permissions live in a DIFFERENT database
 
-A service's own `<service>-setup.sh migrate` targets its own database and its own version table (e.g. `ppc_db` / `schema_migrations_ppc`). But the sidebar **menu entries, permissions and roles** are seeded by **IAM** migrations against the `goapps` database and `schema_migrations_iam` -- a different database *and* a different version table.
+A service's own `<service>-setup.sh migrate` targets its own database and its own version table (e.g. `ppc_db` / `schema_migrations_ppc`). But the sidebar **menu entries, permissions and roles** are seeded by **IAM** migrations against `iam_db` and `schema_migrations_iam` -- a different database *and* a different version table.
 
 Skip this and the new pages load fine by direct URL while the sidebar stays permanently empty. That is exactly what happened to `ppc-service` on 2026-07-29 in both environments (IAM migrations `000079`-`000081`).
 
 ```bash
 ./scripts/iam-setup.sh goapps-staging migrate
 
-kubectl exec -it postgres-0 -n database -- psql -U stgapps -d goapps \
-  -c "SELECT version, dirty FROM schema_migrations_iam;"   # verify by VERSION, not by script output
+# verify by VERSION, not by script output (read-only role from the LAN; .60 staging / .40 production)
+psql "host=192.168.0.60 port=5432 dbname=iam_db user=iam_ro sslmode=require" \
+  -c "SELECT version, dirty FROM schema_migrations_iam;"
 ```
 
 Verify by version number: `iam-setup.sh`'s `kubectl wait` derives its `component=` label from the job name, matches no pod, and burns its timeout masked by `|| true` -- the migration still runs, but the script's output tells you nothing.
@@ -1279,7 +1271,7 @@ Verify by version number: `iam-setup.sh`'s `kubectl wait` derives its `component
 If a seed migration widens a CHECK constraint via `DROP CONSTRAINT` + `ADD CONSTRAINT` (e.g. `chk_permission_action` to admit a new action verb), compare production's live definition against staging's **before** running it there -- a drifted production constraint would be replaced wholesale:
 
 ```bash
-kubectl exec -it postgres-0 -n database -- psql -U <prod-user> -d <prod-db> -c \
+psql "host=192.168.0.40 port=5432 dbname=iam_db user=iam_ro sslmode=require" -c \
   "SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname = 'chk_permission_action';"
 ```
 
@@ -1320,21 +1312,27 @@ kubectl rollout undo deployment/<name> -n <namespace>  # Rollback
 
 ### Database Connection Issues
 
+PostgreSQL runs on the VPS (prod `192.168.0.40`, staging `192.168.0.60`), reached through `pgbouncer-vps`.
+
 ```bash
-kubectl get pods -n database -l app=postgres     # Check PostgreSQL
-kubectl get pods -n database -l app=pgbouncer    # Check PgBouncer
-kubectl logs postgres-0 -n database --tail=100
-kubectl logs deploy/pgbouncer -n database
-kubectl exec -it postgres-0 -n database -- psql -U postgres -c "SELECT count(*) FROM pg_stat_activity"
+kubectl get pods -n database -l app=pgbouncer-vps          # PgBouncer pods
+kubectl logs deploy/pgbouncer-vps -n database --tail=100   # pooler logs
+kubectl get svc pgbouncer-vps -n database
+
+# On the VPS (ssh): service state + connections
+sudo systemctl status postgresql
+sudo -u postgres psql -c "SELECT count(*) FROM pg_stat_activity"
 ```
+
+See `docs/runbooks/postgres-vps-monitoring.md` for alerts and VPS-side checks.
 
 ### Dirty Migration Fix
 
-If a migration fails and leaves the schema_migrations table dirty:
+If a migration fails and leaves the schema_migrations table dirty, connect as the service owner role (from the LAN, or on the VPS via `sudo -u postgres psql -d <svc>_db`):
 
 ```bash
-kubectl exec -it postgres-0 -n database -- psql -U postgres -d goapps -c \
-  "UPDATE schema_migrations_<service> SET dirty = false"
+psql "host=192.168.0.60 port=5432 dbname=<svc>_db user=<svc>_owner sslmode=require" -c \
+  "UPDATE schema_migrations_<svc> SET dirty = false"     # staging .60 / production .40
 ```
 
 ### Rollback Deployment
@@ -1359,21 +1357,21 @@ These are hard-won lessons from production operations:
 | RabbitMQ | Needs minimum 500m CPU, 512Mi memory, 30s probe timeouts. Always add `startupProbe`. |
 | Frontend (Next.js) | Minimum 500m CPU limit or pod will cycle continuously. **500m is the failure floor, not a target** -- both overlays now set 750m. A CPU limit is a throttling ceiling, not a scheduler reservation, so headroom above the floor costs no node allocatable. |
 | Dirty migrations | Fix with `UPDATE schema_migrations_{service} SET dirty = false` in psql. |
-| Migrate vs pg_dump locks | **Incident (prod)**: `finance-setup.sh ... migrate` hung -- the 06:00/14:00/22:00 `postgres-backup-*` CronJob's `pg_dump` held ACCESS SHARE locks, golang-migrate's `TRUNCATE schema_migrations_<svc>` queued for ACCESS EXCLUSIVE, and postgres-exporter/other queries piled up behind it; the script timed out at 120s while the Job kept running. **Guard**: all `services/*/base/migrate-job.yaml` set `options=-c lock_timeout=10s -c statement_timeout=0` on the direct-postgres DATABASE_URL (lib/pq passes `options` through; PgBouncer would NOT support it) so lock waits fail fast. `scripts/lib/db-guard.sh` (sourced by finance/iam/ppc-setup.sh) refuses to run *migrate* while a `postgres-backup-*` Job is active or a `pg_dump` session exists (`FORCE_MIGRATE=1` overrides, `WAIT_FOR_BACKUP=1` polls 30s up to 30m), migrate wait is 300s, and on failure prints Job/pod/log/`pg_stat_activity` diagnostics plus how to delete the still-running Job and check `schema_migrations_<svc>` dirty state. Seeds/backfills unchanged. |
+| Migrate vs pg_dump locks (historical — in-cluster Postgres, removed 2026-11-10) | **Incident (prod)**: `finance-setup.sh ... migrate` hung -- the 06:00/14:00/22:00 `postgres-backup-*` CronJob's `pg_dump` held ACCESS SHARE locks, golang-migrate's `TRUNCATE schema_migrations_<svc>` queued for ACCESS EXCLUSIVE, and postgres-exporter/other queries piled up behind it; the script timed out at 120s while the Job kept running. **Guard**: all `services/*/base/migrate-job.yaml` set `options=-c lock_timeout=10s -c statement_timeout=0` on the direct-postgres DATABASE_URL (lib/pq passes `options` through; PgBouncer would NOT support it) so lock waits fail fast. `scripts/lib/db-guard.sh` (sourced by finance/iam/ppc-setup.sh) refuses to run *migrate* while a `postgres-backup-*` Job is active or a `pg_dump` session exists (`FORCE_MIGRATE=1` overrides, `WAIT_FOR_BACKUP=1` polls 30s up to 30m), migrate wait is 300s, and on failure prints Job/pod/log/`pg_stat_activity` diagnostics plus how to delete the still-running Job and check `schema_migrations_<svc>` dirty state. Seeds/backfills unchanged. |
 | Old K8s Jobs | Failed Jobs from old CronJob runs trigger Grafana backup alerts. Delete stale jobs manually. A Job's pod spec is frozen at creation: Jobs created **before** an image fix keep pulling the old image forever -- delete them after the fix lands. |
 | ArgoCD CLI | Requires port-forward first. Production has no CLI -- use the ArgoCD dashboard. |
 | Kustomize commonLabels | Adding to existing deployments breaks them (immutable label selector). Only set on initial creation. |
 | VPA CRD | Must be installed in the cluster before any VPA resource is referenced in `kustomization.yaml`. |
 | Redis emptyDir | Data is lost on pod restart. Do not store anything that cannot be regenerated. |
 | NetworkPolicies | Required by RULES.md but not yet implemented -- known gap. |
-| ~~Backup CronJob env~~ | **Resolved.** The base sets `ENVIRONMENT=base`; `overlays/{staging,production}/backup/kustomization.yaml` patch it to `staging` / `production` (env index 0), and staging dumps are named `staging_*.sql.gz` (verified 2026-10-12). Applying the base without an overlay is still wrong (see "Backup path targeting"). |
-| Pod Disruption Budgets | None defined -- needed for StatefulSets (PostgreSQL, RabbitMQ, MinIO) to survive node drains safely. |
+| ~~Backup CronJob env~~ | **Resolved.** The base sets `ENVIRONMENT=base`; `overlays/{staging,production}/backup/kustomization.yaml` patch it to `staging` / `production` (env index 0), and MinIO backup output is named per environment (verified 2026-10-12). Applying the base without an overlay is still wrong (see "Backup path targeting"). |
+| Pod Disruption Budgets | Only `pgbouncer-vps` has one (`base/pgbouncer-vps/pdb.yaml`). None for StatefulSets (RabbitMQ, MinIO) -- needed to survive node drains safely. |
 | Resource Quotas | No per-namespace ResourceQuota resources -- risk of one namespace exhausting cluster resources. |
 | Queue-driven HPA fan-out | `finance-cost-worker` scales on an **external** metric (RabbitMQ queue depth), so it can jump to `maxReplicas` with no CPU signal at all. At its old cap (base 50 / prod 20) x 768Mi it alone committed 15360Mi on a ~16Gi node. Memory **requests** for that fan-out are only ~5120Mi, so the scheduler admits every pod and the node OOM-kills instead -- which is how the 2026-08-13 incident took out Grafana in the `monitoring` namespace alongside the finance workers. Capped at prod 7 / staging 4. **Always multiply `maxReplicas x memory limit` against the node before merging an HPA.** |
 | Memory limits vs requests | Node-wide memory *limits* are overcommitted to ~154% even after the fan-out fix. This is tolerable only because requests stay near 33%; do not read a healthy `kubectl describe node` requests figure as proof there is room. |
-| ~~PostgreSQL ServiceMonitor~~ | **Resolved — this gap no longer exists.** `base/database/exporter/deployment.yaml` ships a `ServiceMonitor` named `postgres-exporter` (namespace `monitoring`, `namespaceSelector: database`, port `metrics`, interval 30s) alongside the Deployment and Service. |
+| ~~PostgreSQL ServiceMonitor~~ | **Resolved, then superseded.** The in-cluster `postgres-exporter` was removed (P7); Postgres metrics now come from `postgres_exporter` on each VPS via `base/monitoring/vps-postgres/` (see §6). |
 | App service accounts | Workloads run under the default K8s service account -- no dedicated RBAC service accounts per app. |
-| Backup path targeting (understated before) | Not merely a doc typo. The **effective** paths come from `overlays/{staging,production}/backup/kustomization.yaml`, which patch `hostPath` to `/staging-goapps-backup/postgres` and `/goapps-backup/postgres`. The **base** (`base/backup/cronjobs/postgres-backup.yaml:210,312,414`, `minio-backup.yaml:88`) still says `/mnt/goapps-backup` -- applying base **without** an overlay writes to a path that is not the mounted backup disk. `scripts/bootstrap.sh:82-84` also still mounts at `/mnt/goapps-backup` / `/mnt/stgapps-backup`, so a **newly bootstrapped host would reproduce the mismatch** even though the two existing hosts were fixed by hand. |
+| Backup path targeting (understated before; MinIO backup only now) | Not merely a doc typo. The **effective** paths come from `overlays/{staging,production}/backup/kustomization.yaml`, which patch `hostPath` to `/staging-goapps-backup` and `/goapps-backup` paths (the `postgres/` subdirectories there are historical). The **base** (`minio-backup.yaml:88`) still says `/mnt/goapps-backup` -- applying base **without** an overlay writes to a path that is not the mounted backup disk. `scripts/bootstrap.sh:82-84` also still mounts at `/mnt/goapps-backup` / `/mnt/stgapps-backup`, so a **newly bootstrapped host would reproduce the mismatch** even though the two existing hosts were fixed by hand. |
 | Dead overlay files | `overlays/staging/backup-patch.yaml` and `overlays/production/backup-patch.yaml` are **not referenced by any kustomization** (the live patches are in `overlays/{staging,production}/backup/kustomization.yaml`). They are stale leftovers -- do not edit them expecting an effect; they are candidates for deletion. |
 | RabbitMQ clustering | Single pod, no clustering -- SPOF for the message queue. |
 | Jaeger storage | In-memory only (**5000** trace cap, `MEMORY_MAX_TRACES`) -- consider persistent storage for production. |

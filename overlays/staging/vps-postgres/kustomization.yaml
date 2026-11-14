@@ -1,0 +1,34 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# staging: Prometheus on this cluster scrapes ONLY the staging Postgres VPS (192.168.0.60).
+resources:
+  - ../../../base/monitoring/vps-postgres
+
+patches:
+  - target: {kind: Endpoints, name: vps-node}
+    patch: |-
+      - op: replace
+        path: /subsets/0/addresses/0/ip
+        value: 192.168.0.60
+  - target: {kind: ServiceMonitor, name: vps-node}
+    patch: |-
+      - op: replace
+        path: /spec/endpoints/0/relabelings/1/replacement
+        value: staging
+      - op: replace
+        path: /spec/endpoints/0/relabelings/2/replacement
+        value: psql-goapps-stg
+  - target: {kind: Endpoints, name: vps-postgres}
+    patch: |-
+      - op: replace
+        path: /subsets/0/addresses/0/ip
+        value: 192.168.0.60
+  - target: {kind: ServiceMonitor, name: vps-postgres}
+    patch: |-
+      - op: replace
+        path: /spec/endpoints/0/relabelings/1/replacement
+        value: staging
+      - op: replace
+        path: /spec/endpoints/0/relabelings/2/replacement
+        value: psql-goapps-stg

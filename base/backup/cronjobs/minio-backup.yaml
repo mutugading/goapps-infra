@@ -132,7 +132,7 @@ spec:
                 - name: MINIO_USE_SSL
                   value: "true"
                 - name: MINIO_BUCKETS
-                  value: "postgres-backups export-files"
+                  value: "export-files"
               volumeMounts:
                 - name: backup-storage
                   mountPath: /backup

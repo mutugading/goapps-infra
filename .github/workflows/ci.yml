@@ -66,6 +66,23 @@ jobs:
           done
           echo "✅ All service manifests are valid"
 
+  db-guard:
+    name: DB Overlay Guard
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Kustomize
+        uses: imranismail/setup-kustomize@53f941b41dca13ed61874bbc6b4b6e1562877530 # v3.0.0
+        with:
+          kustomize-version: ${{ env.KUSTOMIZE_VERSION }}
+
+      # Pure bash + python3 stdlib (preinstalled on ubuntu-latest): no extra downloads.
+      - name: Check every overlay uses its own VPS database
+        run: bash scripts/ci/check-db-overlays.sh
+
   lint:
     name: Lint YAML
     runs-on: ubuntu-latest

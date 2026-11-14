@@ -3,7 +3,6 @@ kind: Kustomization
 
 # Staging Environment Backup Overlay
 # Backup paths:
-#   - PostgreSQL: /staging-goapps-backup/postgres
 #   - MinIO: /staging-goapps-backup/minio (app buckets only, not postgres dumps)
 
 namespace: database
@@ -12,70 +11,6 @@ resources:
   - ../../../base/backup
 
 patches:
-  # ===== PostgreSQL Backup Patches =====
-  # Patch backup path for staging VPS - Morning backup
-  - target:
-      kind: CronJob
-      name: postgres-backup-morning
-    patch: |-
-      - op: replace
-        path: /spec/jobTemplate/spec/template/spec/containers/0/env/0/value
-        value: "staging"
-      # Same as production: dumps live on the dedicated backup disk only.
-      # Blanking MINIO_ENDPOINT makes backup.sh skip the MinIO upload and
-      # prune. `test` guards the env index.
-      - op: test
-        path: /spec/jobTemplate/spec/template/spec/containers/0/env/2/name
-        value: "MINIO_ENDPOINT"
-      - op: replace
-        path: /spec/jobTemplate/spec/template/spec/containers/0/env/2/value
-        value: ""
-      - op: replace
-        path: /spec/jobTemplate/spec/template/spec/volumes/0/hostPath/path
-        value: "/staging-goapps-backup/postgres"
-
-  # Patch backup path for staging VPS - Afternoon backup
-  - target:
-      kind: CronJob
-      name: postgres-backup-afternoon
-    patch: |-
-      - op: replace
-        path: /spec/jobTemplate/spec/template/spec/containers/0/env/0/value
-        value: "staging"
-      # Same as production: dumps live on the dedicated backup disk only.
-      # Blanking MINIO_ENDPOINT makes backup.sh skip the MinIO upload and
-      # prune. `test` guards the env index.
-      - op: test
-        path: /spec/jobTemplate/spec/template/spec/containers/0/env/2/name
-        value: "MINIO_ENDPOINT"
-      - op: replace
-        path: /spec/jobTemplate/spec/template/spec/containers/0/env/2/value
-        value: ""
-      - op: replace
-        path: /spec/jobTemplate/spec/template/spec/volumes/0/hostPath/path
-        value: "/staging-goapps-backup/postgres"
-
-  # Patch backup path for staging VPS - Night backup
-  - target:
-      kind: CronJob
-      name: postgres-backup-night
-    patch: |-
-      - op: replace
-        path: /spec/jobTemplate/spec/template/spec/containers/0/env/0/value
-        value: "staging"
-      # Same as production: dumps live on the dedicated backup disk only.
-      # Blanking MINIO_ENDPOINT makes backup.sh skip the MinIO upload and
-      # prune. `test` guards the env index.
-      - op: test
-        path: /spec/jobTemplate/spec/template/spec/containers/0/env/2/name
-        value: "MINIO_ENDPOINT"
-      - op: replace
-        path: /spec/jobTemplate/spec/template/spec/containers/0/env/2/value
-        value: ""
-      - op: replace
-        path: /spec/jobTemplate/spec/template/spec/volumes/0/hostPath/path
-        value: "/staging-goapps-backup/postgres"
-
   # ===== MinIO Backup Patches =====
   # Patch MinIO backup for staging environment
   - target:

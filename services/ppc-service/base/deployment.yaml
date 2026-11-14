@@ -46,10 +46,10 @@ spec:
                 fieldRef:
                   fieldPath: metadata.namespace
             # Database config — PPC owns a dedicated `ppc_db` database on the
-            # shared postgres cluster (connects DIRECTLY to postgres, matching
-            # finance-service). Env keys use the PPC_ prefix (viper bindEnvVars).
+            # VPS PostgreSQL, reached via pgbouncer-vps as ppc_app (ADR 0001).
+            # Env keys use the PPC_ prefix (viper bindEnvVars).
             - name: PPC_DATABASE_HOST
-              value: "postgres.database.svc.cluster.local"
+              value: "pgbouncer-vps.database.svc.cluster.local"
             - name: PPC_DATABASE_PORT
               value: "5432"
             - name: PPC_DATABASE_NAME
@@ -59,13 +59,13 @@ spec:
             - name: PPC_DATABASE_USER
               valueFrom:
                 secretKeyRef:
-                  name: postgres-secret
-                  key: POSTGRES_USER
+                  name: ppc-db-secret
+                  key: APP_USER
             - name: PPC_DATABASE_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: postgres-secret
-                  key: POSTGRES_PASSWORD
+                  name: ppc-db-secret
+                  key: APP_PASSWORD
             # JWT (shared access secret with IAM for user-token validation)
             - name: JWT_ACCESS_SECRET
               valueFrom:

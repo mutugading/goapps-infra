@@ -3,3 +3,16 @@
 # Later patterns take precedence over earlier ones.
 
 * @ilramdhan
+
+# Database guardrails (P8b, ADR 0001): DB wiring changes need owner review
+/services/*/overlays/*/patches/env-database.yaml @ilramdhan
+/services/*/overlays/*/jobs/                     @ilramdhan
+/services/*/base/*job*.yaml                      @ilramdhan
+/base/pgbouncer-vps/                             @ilramdhan
+/overlays/*/pgbouncer-vps/                       @ilramdhan
+/base/monitoring/vps-postgres/                   @ilramdhan
+/overlays/*/vps-postgres/                        @ilramdhan
+/base/monitoring/alert-rules/postgres-vps-alerts.yaml @ilramdhan
+/base/monitoring/dashboards/grafana-dashboard-postgres-vps-configmap.yaml @ilramdhan
+/scripts/postgres/                               @ilramdhan
+/scripts/ci/                                     @ilramdhan

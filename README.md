@@ -2,6 +2,8 @@
 
 Infrastructure as Code (IaC) for **GoApps Microservices Platform** - managing Kubernetes deployments, monitoring, backups, and GitOps.
 
+> **Current architecture (2026-11):** PostgreSQL no longer runs in the cluster. It runs on a VPS behind `pgbouncer-vps`; the old `postgres` StatefulSet, `pgbouncer`, `postgres-exporter` and `postgres-backup-*` CronJobs were removed from git (P7). Backups run on the VPS via systemd `pg-backup.timer`. See `docs/db-v2-cutover.md` and `docs/runbooks/postgres-vps-monitoring.md`. The in-cluster Postgres resources were removed on 2026-11-10 (P7, PR #155).
+
 ---
 
 ## 📋 Table of Contents
@@ -81,12 +83,12 @@ goapps/
 │  │   APPLICATIONS  │      │   MONITORING    │      │      STORAGE        │   │
 │  │                 │      │                 │      │                     │   │
 │  │ ┌─────────────┐ │      │ ┌─────────────┐ │      │ ┌─────────────────┐ │   │
-│  │ │frontend-svc │ │      │ │  Grafana    │ │      │ │   PostgreSQL    │ │   │
-│  │ │ (Next.js)   │ │      │ │  /grafana   │ │      │ │   (Primary DB)  │ │   │
+│  │ │frontend-svc │ │      │ │  Grafana    │ │      │ │ pgbouncer-vps   │ │   │
+│  │ │ (Next.js)   │ │      │ │  /grafana   │ │      │ │ (-> VPS Postgres)│ │   │
 │  │ └─────────────┘ │      │ └─────────────┘ │      │ └─────────────────┘ │   │
 │  │ ┌─────────────┐ │      │ ┌─────────────┐ │      │ ┌─────────────────┐ │   │
-│  │ │finance-svc  │ │      │ │ Prometheus  │ │      │ │    PgBouncer    │ │   │
-│  │ │ (Go/gRPC)   │ │      │ │ /prometheus │ │      │ │   (Pool Conn)   │ │   │
+│  │ │finance-svc  │ │      │ │ Prometheus  │ │      │ │ (Pool Conn)     │ │   │
+│  │ │ (Go/gRPC)   │ │      │ │ /prometheus │ │      │ │ PG18 on VPS     │ │   │
 │  │ └─────────────┘ │      │ └─────────────┘ │      │ └─────────────────┘ │   │
 │  │ ┌─────────────┐ │      │ ┌─────────────┐ │      │ ┌─────────────────┐ │   │
 │  │ │ iam-svc     │ │      │ │    Loki     │ │      │ │      Redis      │ │   │
@@ -130,11 +132,13 @@ graph TB
         end
         
         subgraph "database"
-            PG[PostgreSQL 18]
-            PGB[PgBouncer]
+            PGB[pgbouncer-vps]
             REDIS[Redis]
             RMQ[RabbitMQ]
-            EXP[Postgres Exporter]
+        end
+
+        subgraph "VPS (external, LAN 192.168.0.0/24)"
+            PG[PostgreSQL 18<br/>prod 192.168.0.40 / staging 192.168.0.60]
         end
         
         subgraph "minio"
@@ -192,12 +196,13 @@ graph TB
                         ▼               ▼               ▼       ▼
                   ┌──────────┐   ┌──────────┐   ┌──────────┐ ┌──────────┐
                   │PostgreSQL│   │  Redis   │   │ RabbitMQ │ │  Oracle  │
-                  │ (Main DB)│   │ (Cache)  │   │ (Queue)  │ │(External)│
+                  │ (VPS)    │   │ (Cache)  │   │ (Queue)  │ │(External)│
                   └──────────┘   └──────────┘   └──────────┘ └──────────┘
                         │
                         ▼
                   ┌──────────┐
-                  │ PgBouncer│ (Connection Pooling)
+                  │pgbouncer-│ (Connection Pooling, in K8s)
+                  │   vps    │
                   └──────────┘
 
 
@@ -205,16 +210,17 @@ graph TB
 │                              BACKUP FLOW                                      │
 └──────────────────────────────────────────────────────────────────────────────┘
 
-  ┌──────────────┐      ┌─────────────┐      ┌─────────────┐
-  │  PostgreSQL  │─────▶│   MinIO     │─────▶│ Backblaze   │
-  │   pg_dump    │      │  (Local S3) │      │ B2 (Cloud)  │
-  └──────────────┘      └─────────────┘      └─────────────┘
-         │                     │
-         ▼                     ▼
-  ┌──────────────┐      ┌─────────────┐
-  │  VPS Disk    │      │  VPS Disk   │
-  │  /mnt/backup │      │  /mnt/backup│
-  └──────────────┘      └─────────────┘
+  PostgreSQL (VPS, systemd pg-backup.timer 3x daily)
+  ┌──────────────┐      ┌──────────────────────────────┐
+  │  pg_dump     │─────▶│ /psqldb-backup/postgres/     │
+  │  per DB      │      │ <YYYYMMDD_HHMMSS>/ (VPS disk)│
+  └──────────────┘      └──────────────────────────────┘
+
+  MinIO data (K8s CronJob minio-backup-to-disk, daily)
+  ┌──────────────┐      ┌──────────────────────────────┐
+  │   MinIO      │─────▶│ VPS backup disk (mc mirror)  │
+  │  (Local S3)  │      └──────────────────────────────┘
+  └──────────────┘
 ```
 
 ---
@@ -234,8 +240,8 @@ graph TB
 
 | Component | Version | Description |
 |-----------|---------|-------------|
-| PostgreSQL | 18-alpine | Primary relational database |
-| PgBouncer | latest | Connection pooling |
+| PostgreSQL | 18.4 (on VPS, outside K8s) | Primary relational database (`iam_db`, `finance_db`, `ppc_db`) |
+| PgBouncer | `pgbouncer-vps` | Connection pooling in front of the VPS Postgres |
 | Redis | 7-alpine | In-memory caching |
 | RabbitMQ | 3-management | Message queue |
 | MinIO | latest | S3-compatible object storage |
@@ -270,18 +276,14 @@ goapps-infra/
 │   ├── argocd/                       # ArgoCD base configuration
 │   │   └── kustomization.yaml
 │   ├── backup/                       # Backup configurations
-│   │   ├── cronjobs/                 # PostgreSQL backup schedules
-│   │   │   ├── minio-backup.yaml     # MinIO to VPS backup
-│   │   │   └── postgres-backup.yaml  # 3x daily backups
+│   │   ├── cronjobs/                 # Backup schedules
+│   │   │   └── minio-backup.yaml     # MinIO to VPS disk backup (Postgres backups run on the VPS)
 │   │   ├── minio/                    # MinIO deployment
 │   │   │   ├── deployment.yaml
 │   │   │   └── service.yaml
 │   │   └── kustomization.yaml
 │   ├── database/                     # Database layer
-│   │   ├── exporter/                 # Postgres exporter for metrics
 │   │   ├── oracle/                   # Oracle external service config
-│   │   ├── pgbouncer/                # Connection pooler
-│   │   ├── postgres/                 # PostgreSQL StatefulSet
 │   │   ├── rabbitmq/                 # Message queue
 │   │   ├── redis/                    # Cache layer
 │   │   └── kustomization.yaml
@@ -415,11 +417,14 @@ This script will:
 > ⚠️ **IMPORTANT**: Secrets must NOT be committed to Git!
 
 ```bash
-# PostgreSQL
-kubectl create secret generic postgres-secret -n database \
-  --from-literal=POSTGRES_USER=goapps_admin \
-  --from-literal=POSTGRES_PASSWORD='<STRONG_PASSWORD>' \
-  --from-literal=POSTGRES_DB=goapps
+# Per-service DB secrets (created in each app namespace): APP_* = runtime <svc>_app
+# (via pgbouncer-vps), OWNER_* = <svc>_owner (migrate/seed jobs, direct to the VPS)
+kubectl create secret generic finance-db-secret -n goapps-staging \
+  --from-literal=APP_USER=finance_app --from-literal=APP_PASSWORD='<APP_PASSWORD>' \
+  --from-literal=OWNER_USER=finance_owner --from-literal=OWNER_PASSWORD='<OWNER_PASSWORD>'
+# Same pattern for iam-db-secret and ppc-db-secret. Passwords live in the team
+# password manager (goapps/<env>/postgres/<role>).
+# pgbouncer-vps-userlist (namespace database) holds the scram userlist for pgbouncer-vps.
 
 # MinIO
 kubectl create secret generic minio-secret -n minio \
@@ -540,24 +545,21 @@ make status
 
 ### Database Layer
 
-#### PostgreSQL 18
+#### PostgreSQL 18 (external, on VPS)
 
-- **Location**: `base/database/postgres/`
-- **Type**: StatefulSet with 20Gi PVC
-- **Access**: `postgres.database.svc.cluster.local:5432`
+- **Location**: not in Kubernetes. Prod `192.168.0.40`, staging `192.168.0.60` (PostgreSQL 18.4)
+- **Data / backups**: `/psqldb/postgresql/18/main`, `/psqldb-backup`
+- **Security**: TLS (`hostssl`, scram-sha-256), `pg_hba` only from LAN `192.168.0.0/24`, per-DB per-role
+- **Databases**: one per service (`iam_db`, `finance_db`, `ppc_db`); roles `<svc>_owner` (migrations/seeds, direct), `<svc>_app` (runtime, DML only, via pgbouncer-vps), `<svc>_ro` (read-only)
+- **Config**: `/etc/postgresql/18/main/conf.d/90-goapps.conf` on the VPS, changed by the infra team via ssh + `systemctl reload postgresql` (not a ConfigMap)
+- **Details**: `docs/db-v2-cutover.md`, `docs/runbooks/postgres-vps-monitoring.md`
 
-```yaml
-# Schemas created automatically:
-- finance    # Finance service data
-- (future schemas added in init-schemas.sql)
-```
+#### PgBouncer (`pgbouncer-vps`)
 
-#### PgBouncer
-
-- **Location**: `base/database/pgbouncer/`
-- **Mode**: Transaction pooling
-- **Pool Size**: 100 connections
-- **Access**: `pgbouncer.database.svc.cluster.local:5432`
+- **Location**: `base/pgbouncer-vps/` + `overlays/{staging,production}/pgbouncer-vps/pgbouncer.ini`
+- **Mode**: Transaction pooling, `max_prepared_statements=200`, scram auth via secret `pgbouncer-vps-userlist`
+- **Access**: `pgbouncer-vps.database.svc.cluster.local:5432` (`[databases]`: iam_db, finance_db, ppc_db -> VPS IP)
+- **Tuning**: edit pool sizes in `pgbouncer.ini` of the overlay, then ArgoCD sync
 
 #### Redis
 
@@ -633,7 +635,7 @@ HPA:
   Target CPU: 70%
 
 Environment Variables:
-  - DATABASE_HOST: postgres.database.svc.cluster.local
+  - DATABASE_HOST: pgbouncer-vps.database.svc.cluster.local
   - REDIS_HOST: redis.database.svc.cluster.local
   - JAEGER_ENDPOINT: jaeger-collector.monitoring.svc.cluster.local:4317
 ```
@@ -700,7 +702,7 @@ git add . && git commit -m "feat: add new-service" && git push
 | Dashboard | File | Description |
 |-----------|------|-------------|
 | Go Apps Overview | `grafana-dashboard-go-apps.json` | Service metrics, HPA status |
-| PostgreSQL | `grafana-dashboard-postgres.json` | Database performance |
+| PostgreSQL VPS | `grafana-dashboard-postgres-vps-configmap.yaml` | VPS Postgres performance, backups |
 | Loki Logs | `grafana-dashboard-loki.json` | Centralized logging |
 
 ### Alert Categories
@@ -711,8 +713,8 @@ git add . && git commit -m "feat: add new-service" && git push
 | Pod Status | CrashLoopBackOff, High restart count |
 | HPA Scaling | Reached max replicas |
 | PVC Storage | Volume nearly full |
-| PostgreSQL | Connection pool exhausted, Slow queries |
-| Backup | Backup job failed, Old backups |
+| PostgreSQL (VPS) | `postgres-vps-alerts.yaml` (16 rules): PG/exporter down, connections, long/idle transactions, deadlocks, backup stale/failed, restore test, disk/memory/swap/iowait, bloat |
+| Backup | MinIO backup job failed, Postgres backup age/failure (VPS) |
 
 ### Jaeger Tracing
 
@@ -732,56 +734,57 @@ git add . && git commit -m "feat: add new-service" && git push
 ├──────────────┬──────────────────┬────────────┬──────────────┬───────────┤
 │    Target    │   Destination    │  Schedule  │  Retention   │   Type    │
 ├──────────────┼──────────────────┼────────────┼──────────────┼───────────┤
-│ PostgreSQL   │ MinIO (Local)    │ 3x daily   │ 7 days       │ pg_dump   │
-│ PostgreSQL   │ Backblaze B2     │ 3x daily   │ 7 days       │ pg_dump   │
-│ PostgreSQL   │ VPS Disk         │ 3x daily   │ 7 days       │ pg_dump   │
+│ PostgreSQL   │ VPS /psqldb-     │ 3x daily   │ 7 days       │ pg_dump   │
+│ (on VPS)     │ backup           │ (systemd)  │              │ (custom)  │
 │ MinIO        │ VPS Disk only    │ Daily      │ 7 days       │ mc mirror │
 └──────────────┴──────────────────┴────────────┴──────────────┴───────────┘
 ```
 
 ### Backup Schedule
 
-| CronJob | Time (WIB) | Timezone |
-|---------|------------|----------|
-| `postgres-backup-morning` | 04:00 | Asia/Jakarta |
-| `postgres-backup-afternoon` | 12:00 | Asia/Jakarta |
-| `postgres-backup-night` | 20:00 | Asia/Jakarta |
-| `minio-backup` | 03:00 | Asia/Jakarta |
+| Job | Time (WIB) | Where |
+|-----|------------|-------|
+| `pg-backup.timer` | 04:00 / 12:00 / 20:00 | systemd on each Postgres VPS |
+| `pg-restore-test.timer` | Sun 06:00 | systemd on each Postgres VPS |
+| `minio-backup-to-disk` (CronJob) | 03:00 | Kubernetes, namespace `database` |
 
 ### Backup Locations
 
-| Environment | VPS Path | MinIO Bucket |
-|-------------|----------|--------------|
-| Staging | `/staging-goapps-backup/postgres` | `postgres-backups` |
-| Production | `/goapps-backup/postgres` | `postgres-backups` |
+| Data | Path |
+|------|------|
+| PostgreSQL dumps (prod/staging VPS) | `/psqldb-backup/postgres/<YYYYMMDD_HHMMSS>/` (one custom-format zstd dump per DB + globals) |
+| Final K8s Postgres archives | `/psqldb-backup/archive/k8s-final-*` on .40/.60, kept until about 2027-02-10 |
+| MinIO data (staging / production) | `/staging-goapps-backup/` / `/goapps-backup/` on the K8s node (`minio/<bucket>/`) |
 
-### Manual Backup
+Each dump is verified (`VERIFY OK` in the journal); retention is 7 days (skipped when a run is degraded). The scripts/units come from the goapps workspace `docs/migration-postgres/v2/vps/`.
+
+### Check Backups
 
 ```bash
-# Trigger backup manually
+# On the Postgres VPS
+systemctl list-timers 'pg-*'
+journalctl -u pg-backup.service -n 50
+ls -lt /psqldb-backup/postgres | head
+```
+
+### Manual MinIO Backup
+
+```bash
+# Trigger MinIO backup manually (Postgres backups run on the VPS)
 make backup-now
-
-# Or directly
-kubectl create job --from=cronjob/postgres-backup-morning \
-  postgres-backup-manual-$(date +%Y%m%d%H%M%S) -n database
 ```
 
-### Restore Procedure
+### Restore Procedure (PostgreSQL)
 
 ```bash
-# 1. List available backups
-ls -la /mnt/goapps-backup/postgres/
-# or
-mc ls minio/postgres-backups/
+# 1. On the VPS, pick a dump
+ls -lt /psqldb-backup/postgres | head
 
-# 2. Copy backup to pod
-kubectl cp <backup-file>.sql.gz database/postgres-0:/tmp/
-
-# 3. Restore
-kubectl exec -it postgres-0 -n database -- bash -c "
-  gunzip -c /tmp/<backup-file>.sql.gz | psql -U postgres -d goapps
-"
+# 2. Restore a single DB (as the postgres user, into a scratch DB first)
+sudo -u postgres pg_restore --dbname=<scratch_db> /psqldb-backup/postgres/<timestamp>/<svc>_db.dump
 ```
+
+`pg-restore-test.timer` restores the latest dump into a scratch DB every Sunday ("RESTORE TEST PASSED" in the journal).
 
 ---
 
@@ -791,7 +794,8 @@ kubectl exec -it postgres-0 -n database -- bash -c "
 
 | Secret Name | Namespace | Required Keys |
 |-------------|-----------|---------------|
-| `postgres-secret` | database | POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB |
+| `iam-db-secret`, `finance-db-secret`, `ppc-db-secret` | app namespaces | `APP_USER/APP_PASSWORD` (`<svc>_app`) + `OWNER_USER/OWNER_PASSWORD` (`<svc>_owner`) |
+| `pgbouncer-vps-userlist` | database | pgbouncer scram userlist |
 | `minio-secret` | minio, database | MINIO_ROOT_USER, MINIO_ROOT_PASSWORD |
 | `rabbitmq-secret` | database | RABBITMQ_USER, RABBITMQ_PASSWORD |
 | `oracle-credentials` | goapps-* | ORACLE_HOST, ORACLE_PORT, ORACLE_*_USER, ORACLE_*_PASSWORD |
@@ -876,13 +880,13 @@ kubectl logs <pod-name> -n <namespace> --previous
 #### Database Connection Issues
 
 ```bash
-# Test PostgreSQL directly
-kubectl exec -it postgres-0 -n database -- \
-  psql -U goapps_admin -d goapps -c "SELECT 1"
+# Test PostgreSQL directly (from the LAN 192.168.0.0/24, or on the VPS)
+psql "host=192.168.0.60 dbname=finance_db user=finance_ro sslmode=require" -c "SELECT 1"
+# on the VPS: sudo -u postgres psql -d <svc>_db
 
-# Test via PgBouncer
+# Test via pgbouncer-vps
 kubectl run test-pg --rm -it --image=postgres:18-alpine -- \
-  psql -h pgbouncer.database -U goapps_admin -d goapps
+  psql -h pgbouncer-vps.database -U finance_app -d finance_db
 ```
 
 #### Ingress Not Working
@@ -928,9 +932,6 @@ kubectl describe pvc <pvc-name> -n <namespace>
 ```bash
 # Cluster overview
 make status
-
-# PostgreSQL logs
-make logs-postgres
 
 # ArgoCD logs
 make logs-argocd

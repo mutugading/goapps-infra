@@ -11,7 +11,8 @@ patches:
 - path: patches/env-cors.yaml
 - path: patches/env-storage.yaml
 - path: patches/env-oracle.yaml
+- path: patches/env-oracle-hris.yaml
 - path: patches/env-erp.yaml
 images:
 - name: ghcr.io/mutugading/finance-service
-  newTag: 44753c6
+  newTag: "5362556"

@@ -13,4 +13,4 @@ patches:
 - path: patches/env-finance-client.yaml
 images:
 - name: ghcr.io/mutugading/ppc-service
-  newTag: ff85eaf
+  newTag: "5362556"

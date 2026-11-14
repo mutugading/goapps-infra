@@ -121,11 +121,11 @@ jobs:
 
       - name: Check Backup Jobs
         run: |
-          echo "🔍 Checking backup job status..."
-          kubectl get cronjobs -n database
-          
+          echo "🔍 Checking MinIO backup cronjob (PostgreSQL backups run on the VPS)..."
+          kubectl get cronjob minio-backup-to-disk -n database
+
           # Get last job status
-          LAST_JOB=$(kubectl get jobs -n database --sort-by=.metadata.creationTimestamp -o name | tail -1)
+          LAST_JOB=$(kubectl get jobs -n database --sort-by=.metadata.creationTimestamp -o name | grep minio-backup-to-disk | tail -1)
           if [ -n "$LAST_JOB" ]; then
             kubectl describe $LAST_JOB -n database | grep -A5 "Pods Statuses"
           fi

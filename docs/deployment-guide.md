@@ -67,14 +67,14 @@ kubectl get namespaces
 
 Lihat template di `base/secrets/secrets-template.yaml` untuk referensi.
 
-### PostgreSQL
+### PostgreSQL (VPS)
 
-```bash
-kubectl create secret generic postgres-secret -n database \
-  --from-literal=POSTGRES_USER=goapps_admin \
-  --from-literal=POSTGRES_PASSWORD='<STRONG_PASSWORD>' \
-  --from-literal=POSTGRES_DB=goapps
-```
+PostgreSQL berjalan di VPS terpisah (prod `192.168.0.40`, staging `192.168.0.60`), bukan di K3s. Tidak ada `postgres-secret`. Yang dibuat di cluster:
+
+- `<svc>-db-secret` (`iam-db-secret`, `finance-db-secret`, `ppc-db-secret`) di namespace aplikasi -- keys `APP_USER`/`APP_PASSWORD` (runtime, role `<svc>_app`) dan `OWNER_USER`/`OWNER_PASSWORD` (role `<svc>_owner`, dipakai job migrate/seed).
+- `pgbouncer-vps-userlist` di namespace `database` -- auth file (scram) untuk `pgbouncer-vps`.
+
+Password role ada di password manager tim (`goapps/<env>/postgres/<role>`). Lihat `docs/secrets-env-inventory.md`.
 
 ### MinIO
 
@@ -198,7 +198,7 @@ make apply-base
 
 # Atau manual:
 kubectl apply -k base/namespaces/
-kubectl apply -k base/database/  # includes PostgreSQL, PgBouncer, Redis, RabbitMQ
+kubectl apply -k base/database/  # Redis, RabbitMQ, Oracle (PostgreSQL ada di VPS; PgBouncer = base/pgbouncer-vps via ArgoCD)
 kubectl apply -k base/backup/
 kubectl apply -k base/observability/  # Jaeger
 
@@ -312,7 +312,8 @@ If migration fails with `error: Dirty database version N. Fix and force version.
 
 ```bash
 # 1. Check current state
-kubectl exec -it postgres-0 -n database -- psql -U postgres -d goapps -c \
+# On the VPS (or psql from the LAN, sslmode=require, as iam_owner):
+sudo -u postgres psql -d iam_db -c \
   "SELECT version, dirty FROM schema_migrations_iam;"
 
 # 2. Determine the correct version:
@@ -321,7 +322,7 @@ kubectl exec -it postgres-0 -n database -- psql -U postgres -d goapps -c \
 #    - Example: if all 13 IAM migrations were applied, set version=13
 
 # 3. Fix the dirty flag AND set correct version
-kubectl exec -it postgres-0 -n database -- psql -U postgres -d goapps -c \
+sudo -u postgres psql -d iam_db -c \
   "UPDATE schema_migrations_iam SET version = <correct_version>, dirty = false;"
 
 # 4. Re-run migration
@@ -331,7 +332,7 @@ kubectl delete job iam-migrate -n goapps-staging --ignore-not-found
 
 **Common cause**: Migration Job crashed/timed out mid-execution, or tables were created outside of golang-migrate (manual SQL, seed job). The `schema_migrations_*` table tracks which version was last applied — if it doesn't match reality, you must manually correct it.
 
-**For finance service**, replace `schema_migrations_iam` with `schema_migrations_finance`.
+**For finance service**, replace `schema_migrations_iam` with `schema_migrations_finance` and use `finance_db`.
 
 ### Migration Files Reference
 
@@ -356,8 +357,8 @@ kubectl delete job iam-migrate -n goapps-staging --ignore-not-found
 - [ ] Seeds applied: `kubectl get jobs -n goapps-staging | grep seed`
 - [ ] K3s cluster running: `kubectl get nodes`
 - [ ] All namespaces created: `kubectl get ns`
-- [ ] PostgreSQL running: `kubectl get pods -n database -l app=postgres`
-- [ ] PgBouncer running: `kubectl get pods -n database -l app=pgbouncer`
+- [ ] PostgreSQL running on the VPS: `systemctl status postgresql` (on .40/.60)
+- [ ] PgBouncer running: `kubectl get pods -n database -l app=pgbouncer-vps`
 - [ ] Redis running: `kubectl get pods -n database -l app=redis`
 - [ ] RabbitMQ running: `kubectl get pods -n database -l app=rabbitmq`
 - [ ] MinIO running: `kubectl get pods -n minio`
@@ -394,7 +395,7 @@ kubectl logs <pod-name> -n <namespace>
 ### Database connection issues
 ```bash
 kubectl run test-pg --rm -it --image=postgres:18-alpine -- \
-  psql -h pgbouncer.database -U goapps_admin -d goapps
+  psql -h pgbouncer-vps.database -U <svc>_app -d <svc>_db
 ```
 
 ### Oracle connectivity test
@@ -411,8 +412,8 @@ kubectl run test-net --rm -it --image=busybox -- /bin/sh -c \
 | Command | Description |
 |---------|-------------|
 | `make status` | Cluster overview |
-| `make logs-postgres` | PostgreSQL logs |
-| `make backup-now` | Manual backup trigger |
+| `make logs-postgres` | (obsolete: Postgres is on the VPS; use `journalctl -u postgresql` there) |
+| `make backup-now` | Manual MinIO disk backup (Postgres backups run on the VPS) |
 | `make port-forward-grafana` | Access Grafana locally |
 | `make port-forward-argocd` | Access ArgoCD locally |
 | `make port-forward-jaeger` | Access Jaeger UI |

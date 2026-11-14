@@ -24,8 +24,8 @@ kubectl exec -n $NS deploy/<deploy> -- env | grep '^ORACLE' | sed 's/=.*/=<set>/
 | Secret | Keys | Notes |
 |--------|------|-------|
 | `oracle-credentials` | `ORACLE_HOST`, `ORACLE_PORT`, `ORACLE_SERVICE`, `ORACLE_USER`, `ORACLE_PASSWORD`, `ORACLE_MGTHRIS_USER`, `ORACLE_MGTHRIS_PASSWORD`, `ORACLE_MGTAPPS_USER`, `ORACLE_MGTAPPS_PASSWORD`, `ORACLE_MGTDAT_USER`, `ORACLE_MGTDAT_PASSWORD` | Key list verified on **production**. One Oracle instance, several schema accounts. Staging points at oracle-rnd -- check its keys before relying on `MGT*`. |
-| `postgres-secret` | `POSTGRES_USER`, `POSTGRES_PASSWORD` | Production DB login for all backend services. |
-| `finance-db-secret` / `iam-db-secret` / `ppc-db-secret` | `APP_USER`, `APP_PASSWORD` | **Staging only** -- per-service `<svc>_app` roles (ADR 0001). Production still uses `postgres-secret`. |
+| `pgbouncer-vps-userlist` | `userlist.txt` (scram auth file) | Namespace `database`; used by `pgbouncer-vps`. |
+| `finance-db-secret` / `iam-db-secret` / `ppc-db-secret` | `APP_USER`, `APP_PASSWORD`, `OWNER_USER`, `OWNER_PASSWORD` | `APP_*` = runtime `<svc>_app`; `OWNER_*` = `<svc>_owner` for migrate/seed jobs. Per-service roles (ADR 0001), staging and production. `postgres-secret` was removed with the in-cluster Postgres (2026-11-10). |
 | `goapps-auth-secret` | `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET` | |
 | `goapps-internal-token` | `INTERNAL_SERVICE_TOKEN` | Service-to-service token. |
 | `ppc-internal-token` | `PPC_INTERNAL_TOKEN` | Value **must equal** `INTERNAL_SERVICE_TOKEN` in the same namespace. |
@@ -44,11 +44,11 @@ Format: `ENV_VAR` ← `secret/KEY`. "both" = staging and production.
 | Env var | Source | Used by |
 |---------|--------|---------|
 | `ORACLE_HOST`, `ORACLE_PORT`, `ORACLE_SERVICE`, `ORACLE_USER`, `ORACLE_PASSWORD` | `oracle-credentials/<same name>` | finance-service, finance-worker, ppc-service (both) |
-| `ORACLE_HRIS_HOST` | `oracle-credentials/ORACLE_HOST` | finance-service (production) |
-| `ORACLE_HRIS_PORT` | `oracle-credentials/ORACLE_PORT` | finance-service (production) |
-| `ORACLE_HRIS_SERVICE` | `oracle-credentials/ORACLE_SERVICE` | finance-service (production) |
-| `ORACLE_HRIS_USER` | `oracle-credentials/ORACLE_MGTHRIS_USER` | finance-service (production) |
-| `ORACLE_HRIS_PASSWORD` | `oracle-credentials/ORACLE_MGTHRIS_PASSWORD` | finance-service (production) |
+| `ORACLE_HRIS_HOST` | `oracle-credentials/ORACLE_HOST` | finance-service (both) |
+| `ORACLE_HRIS_PORT` | `oracle-credentials/ORACLE_PORT` | finance-service (both) |
+| `ORACLE_HRIS_SERVICE` | `oracle-credentials/ORACLE_SERVICE` | finance-service (both) |
+| `ORACLE_HRIS_USER` | `oracle-credentials/ORACLE_MGTHRIS_USER` | finance-service (both) |
+| `ORACLE_HRIS_PASSWORD` | `oracle-credentials/ORACLE_MGTHRIS_PASSWORD` | finance-service (both) |
 
 **HRIS = MGTHRIS.** The HR dashboard ETL (data source `HRIS_ORACLE`) reads `MGTHRIS.VIEW_BI_ATT_DAILY`
 / `VIEW_BI_OT_DAILY` with the MGTHRIS account on the same Oracle instance. finance-service only
@@ -56,16 +56,16 @@ installs the HRIS runner when `ORACLE_HRIS_HOST/SERVICE/USER/PASSWORD` are all s
 `Oracle HRIS not configured (ORACLE_HRIS_*)` at startup and HRIS jobs fail with
 `ETL runner for data source HRIS_ORACLE is not configured or its connection is unavailable`.
 The runner is registered only at startup -- restart the pod after fixing credentials.
-Patch: `services/finance-service/overlays/production/patches/env-oracle-hris.yaml`. Staging has no HRIS env yet.
+Patch: `services/finance-service/overlays/{production,staging}/patches/env-oracle-hris.yaml`.
 
 ### Database
 
 | Env var | Source (production) | Source (staging) | Used by |
 |---------|--------------------|------------------|---------|
-| `DATABASE_USER` | `postgres-secret/POSTGRES_USER` | `finance-db-secret/APP_USER` or `iam-db-secret/APP_USER` | finance-service, finance-worker, finance-cost-worker, finance-cost-orchestrator, iam-service |
-| `DATABASE_PASSWORD` | `postgres-secret/POSTGRES_PASSWORD` | `<svc>-db-secret/APP_PASSWORD` | same as above |
-| `PPC_DATABASE_USER` | `postgres-secret/POSTGRES_USER` | `ppc-db-secret/APP_USER` | ppc-service |
-| `PPC_DATABASE_PASSWORD` | `postgres-secret/POSTGRES_PASSWORD` | `ppc-db-secret/APP_PASSWORD` | ppc-service |
+| `DATABASE_USER` | `finance-db-secret/APP_USER` or `iam-db-secret/APP_USER` | same | finance-service, finance-worker, finance-cost-worker, finance-cost-orchestrator, iam-service |
+| `DATABASE_PASSWORD` | `<svc>-db-secret/APP_PASSWORD` | same | same as above |
+| `PPC_DATABASE_USER` | `ppc-db-secret/APP_USER` | same | ppc-service |
+| `PPC_DATABASE_PASSWORD` | `ppc-db-secret/APP_PASSWORD` | same | ppc-service |
 
 ### Auth / service tokens
 

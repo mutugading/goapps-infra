@@ -35,8 +35,7 @@ help:
 	@echo ""
 	@echo "$(YELLOW)Maintenance:$(NC)"
 	@echo "  make status              - Cluster status"
-	@echo "  make logs-postgres       - PostgreSQL logs"
-	@echo "  make backup-now          - Trigger manual backup"
+	@echo "  make backup-now          - Trigger manual MinIO disk backup"
 	@echo ""
 	@echo "$(YELLOW)Danger Zone:$(NC)"
 	@echo "  make reset               - Uninstall K3s (DESTRUCTIVE!)"
@@ -112,9 +111,6 @@ status:
 	@echo "$(GREEN)=== ArgoCD Apps ===$(NC)"
 	kubectl get applications -n argocd 2>/dev/null || echo "ArgoCD not installed"
 
-logs-postgres:
-	kubectl logs -f statefulset/postgres -n database
-
 logs-argocd:
 	kubectl logs -f deployment/argocd-server -n argocd
 
@@ -123,8 +119,8 @@ logs-argocd:
 # =============================================================================
 
 backup-now:
-	@echo "$(GREEN)Creating manual backup...$(NC)"
-	kubectl create job --from=cronjob/postgres-backup-morning postgres-backup-manual-$(shell date +%Y%m%d%H%M%S) -n database
+	@echo "$(GREEN)Creating manual MinIO disk backup (PostgreSQL backups run on the VPS via systemd pg-backup.timer)...$(NC)"
+	kubectl create job --from=cronjob/minio-backup-to-disk minio-backup-manual-$(shell date +%Y%m%d%H%M%S) -n database
 	@echo "Backup job created. Check status with: kubectl get jobs -n database"
 
 # =============================================================================

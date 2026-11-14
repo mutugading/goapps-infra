@@ -1,0 +1,38 @@
+# Oracle HRIS credentials for the HR dashboard ETL (HD-02) — data source HRIS_ORACLE.
+# Reads MGTHRIS.VIEW_BI_ATT_DAILY / VIEW_BI_OT_DAILY with the MGTHRIS account. Same Oracle
+# instance as ERP, so host/port/service reuse the shared oracle-credentials keys.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: finance-service
+spec:
+  template:
+    spec:
+      containers:
+        - name: finance-service
+          env:
+            - name: ORACLE_HRIS_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: oracle-credentials
+                  key: ORACLE_HOST
+            - name: ORACLE_HRIS_PORT
+              valueFrom:
+                secretKeyRef:
+                  name: oracle-credentials
+                  key: ORACLE_PORT
+            - name: ORACLE_HRIS_SERVICE
+              valueFrom:
+                secretKeyRef:
+                  name: oracle-credentials
+                  key: ORACLE_SERVICE
+            - name: ORACLE_HRIS_USER
+              valueFrom:
+                secretKeyRef:
+                  name: oracle-credentials
+                  key: ORACLE_MGTHRIS_USER
+            - name: ORACLE_HRIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: oracle-credentials
+                  key: ORACLE_MGTHRIS_PASSWORD
