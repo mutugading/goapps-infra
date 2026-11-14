@@ -1,16 +1,36 @@
 #!/usr/bin/env bash
-# Pasang kustomize, kubeconform, actionlint ke ~/bin (linux/amd64).
+# Pasang kustomize, kubeconform, actionlint ke ~/.local/bin (override: BIN_DIR).
+# Mendukung Linux dan macOS (amd64/arm64); OS/arch dideteksi dari uname.
 # Idempoten: alat yang sudah terpasang dengan versi sama dilewati.
 # Ganti versi lewat env, mis.: KUSTOMIZE_VERSION=5.5.0 ./install-infra-tools.sh
 set -euo pipefail
 
-KUSTOMIZE_VERSION="${KUSTOMIZE_VERSION:-5.4.3}"
+# Samakan KUSTOMIZE_VERSION dengan .github/workflows/ci.yml (env KUSTOMIZE_VERSION)
+# supaya hasil validasi lokal = hasil CI. kubeconform & actionlint tidak dipatok CI.
+KUSTOMIZE_VERSION="${KUSTOMIZE_VERSION:-5.3.0}"
 KUBECONFORM_VERSION="${KUBECONFORM_VERSION:-0.6.7}"
 ACTIONLINT_VERSION="${ACTIONLINT_VERSION:-1.7.1}"
 
-BIN_DIR="${BIN_DIR:-$HOME/bin}"
-ARCH="amd64"
-OS="linux"
+BIN_DIR="${BIN_DIR:-$HOME/.local/bin}"
+
+case "$(uname -s)" in
+  Linux)  OS="linux" ;;
+  Darwin) OS="darwin" ;;
+  *) echo "OS tidak didukung: $(uname -s) (hanya Linux dan macOS)" >&2; exit 1 ;;
+esac
+case "$(uname -m)" in
+  x86_64)        ARCH="amd64" ;;
+  arm64|aarch64) ARCH="arm64" ;;
+  *) echo "Arsitektur tidak didukung: $(uname -m) (hanya amd64 dan arm64)" >&2; exit 1 ;;
+esac
+
+if command -v sha256sum >/dev/null 2>&1; then
+  sha256() { sha256sum "$1" | awk '{print $1}'; }
+elif command -v shasum >/dev/null 2>&1; then
+  sha256() { shasum -a 256 "$1" | awk '{print $1}'; }
+else
+  echo "sha256sum atau shasum tidak ditemukan" >&2; exit 1
+fi
 
 mkdir -p "$BIN_DIR"
 TMP="$(mktemp -d)"
@@ -23,12 +43,14 @@ verify() {
   local file="$1" sums="$2" name="$3" want got
   want="$(grep -E "[[:space:]]\*?${name}\$" "$sums" | awk '{print $1}' | head -n1)"
   [ -n "$want" ] || { echo "checksum untuk $name tidak ditemukan" >&2; exit 1; }
-  got="$(sha256sum "$file" | awk '{print $1}')"
+  got="$(sha256 "$file")"
   [ "$want" = "$got" ] || { echo "CHECKSUM TIDAK COCOK untuk $name" >&2; exit 1; }
   echo "  checksum OK: $name"
 }
 
-# install <nama> <versi> <perintah-cek-versi> <fungsi-unduh>
+# need <nama> <versi> [argumen-cek-versi]
+# Return 0 kalau alat perlu dipasang; return 1 kalau sudah terpasang dengan versi itu.
+# Argumen ketiga default "version" (kustomize); kubeconform: -v; actionlint: -version.
 need() {
   local tool="$1" ver="$2"
   if [ -x "$BIN_DIR/$tool" ] && "$BIN_DIR/$tool" ${3:-version} 2>&1 | grep -q "$ver"; then
@@ -68,14 +90,14 @@ if need actionlint "$ACTIONLINT_VERSION" -version; then
   install -m 0755 "$TMP/actionlint" "$BIN_DIR/actionlint"
 fi
 
-# Tambahkan ~/bin ke PATH di ~/.bashrc kalau belum ada.
+# Jangan ubah rc file; cukup beri instruksi PATH kalau BIN_DIR belum ada di PATH.
 case ":$PATH:" in
   *":$BIN_DIR:"*) ;;
   *)
-    if ! grep -qs 'export PATH="\$HOME/bin:\$PATH"' "$HOME/.bashrc"; then
-      echo 'export PATH="$HOME/bin:$PATH"' >> "$HOME/.bashrc"
-      echo "Menambahkan ~/bin ke PATH di ~/.bashrc (buka shell baru atau: source ~/.bashrc)"
-    fi
+    echo
+    echo "$BIN_DIR belum ada di PATH. Tambahkan ke rc file shell Anda"
+    echo "(~/.bashrc untuk bash, ~/.zshrc untuk zsh):"
+    echo "  export PATH=\"$BIN_DIR:\$PATH\""
     export PATH="$BIN_DIR:$PATH"
     ;;
 esac
