@@ -63,7 +63,7 @@ spec:
             - name: PAYROLL_DATABASE_PORT
               value: "5432"
             - name: PAYROLL_DATABASE_NAME
-              value: "payroll"
+              value: "payroll_db"
             - name: PAYROLL_DATABASE_USER
               valueFrom:
                 secretKeyRef:

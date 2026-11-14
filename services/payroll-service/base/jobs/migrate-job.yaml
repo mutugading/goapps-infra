@@ -1,5 +1,5 @@
 # Payroll Migration Job: golang-migrate as `payroll_migrator` (it assumes ROLE payroll_owner through the
-# role setting from deploy/payroll/bootstrap.sql, D-04). The `payroll` DB, roles and schemas are created
+# role setting from deploy/payroll/bootstrap.sql, D-04). The `payroll_db` DB (D-66), roles and schemas are created
 # beforehand by the DBA running bootstrap.sql as superuser (cluster-level, not a migration), so there is no
 # createdb Job. Run order: bootstrap.sql (DBA, once) -> payroll-migrate -> deploy.
 #
