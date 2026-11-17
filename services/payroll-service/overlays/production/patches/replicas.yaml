@@ -1,0 +1,8 @@
+# Single replica: one operator run at a time; the API holds no leader-elected work, but payroll runs are
+# serialised by advisory locks and the go-live load is small (±1.300 employees).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payroll-service
+spec:
+  replicas: 1

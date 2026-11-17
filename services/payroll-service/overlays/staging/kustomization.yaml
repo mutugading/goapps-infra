@@ -1,0 +1,15 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: goapps-staging
+resources:
+- ../../base
+patches:
+- path: patches/env-database.yaml
+- path: patches/env-cors.yaml
+- path: patches/replicas.yaml
+- path: patches/resources.yaml
+# WARNING: `latest` is a placeholder (imagePullPolicy Always). Do NOT sync staging until ArgoCD Image Updater has
+# replaced it with the bare-SHA tag of the first CI build; syncing before then deploys an unpinned/missing image.
+images:
+- name: ghcr.io/mutugading/payroll-service
+  newTag: latest # replaced by ArgoCD Image Updater (bare-SHA tags) after the first CI build

@@ -1,0 +1,18 @@
+# One-off Jobs (production). NOT referenced by ../kustomization.yaml and not synced by ArgoCD: render and apply manually, e.g.
+#   kustomize build services/payroll-service/overlays/production/jobs | sed "s|IMAGE_TAG|<tag>|" | kubectl apply -f -
+# (payroll-sync/report/mailer/recon are per-CLI templates: see the header of base/jobs/<cli>-job.yaml for the args.)
+# Jobs connect DIRECT to the VPS 192.168.0.40:5432 (not via PgBouncer: DDL, advisory locks) with sslmode=require.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: goapps-production
+resources:
+- ../../../base/jobs
+patches:
+- path: patches/payroll-migrate.yaml
+generatorOptions:
+  disableNameSuffixHash: true
+configMapGenerator:
+- name: payroll-cli-config
+  literals:
+  - PG_HOST=192.168.0.40
+  - PG_SSLMODE=require
