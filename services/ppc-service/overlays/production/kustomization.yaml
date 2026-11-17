@@ -13,4 +13,4 @@ patches:
 - path: patches/env-finance-client.yaml
 images:
 - name: ghcr.io/mutugading/ppc-service
-  newTag: "5362556"
+  newTag: ce3982b
