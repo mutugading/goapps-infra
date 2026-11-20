@@ -333,12 +333,12 @@ step5_monitor() {
   pg -q -c "ALTER ROLE monitor CONNECTION LIMIT $lim"
   say "  monitor limit = $lim"
   [[ -f "$EXPORTER_ENV" ]] || { say "  WARN $EXPORTER_ENV missing (SKIP exporter)"; return; }
-  if sudo grep -qE "include-databases=[^ \"']*\b${DB}\b" "$EXPORTER_ENV"; then
+  if sudo grep -E '^ARGS=' "$EXPORTER_ENV" | grep -qE "include-databases=[^ \"']*\b${DB}\b"; then
     say "  exporter already lists $DB (SKIP)"
   else
-    sudo grep -q 'include-databases=' "$EXPORTER_ENV" || die "no --include-databases= in $EXPORTER_ENV; edit manually"
+    sudo grep -qE '^ARGS=.*include-databases=' "$EXPORTER_ENV" || die "no --include-databases= in $EXPORTER_ENV; edit manually"
     sudo cp -p "$EXPORTER_ENV" "$EXPORTER_ENV.bak-$SVC-$TS"
-    sudo sed -i -E "s/(include-databases=[^ \"']*)/\1,${DB}/" "$EXPORTER_ENV"
+    sudo sed -i -E "/^ARGS=/ s/(include-databases=[^ \"']*)/\1,${DB}/" "$EXPORTER_ENV"
     sudo systemctl restart prometheus-postgres-exporter
     say "  OK (exporter restarted)"
   fi
