@@ -2524,7 +2524,7 @@ data:
               "refId": "datname"
             },
             "refresh": 2,
-            "regex": "/^(iam_db|finance_db|ppc_db)$/",
+            "regex": "/^(iam_db|finance_db|ppc_db|mgtapps_db)$/",
             "includeAll": true,
             "multi": true,
             "sort": 1,
