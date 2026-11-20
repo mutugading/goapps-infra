@@ -36,7 +36,7 @@ See `docs/migration-postgres/v2/monitoring-new-service-db.md` for the monitoring
 role timeouts (`_app` 30s stmt / 60s idle-in-tx, `_owner` 15min / 5min), pg_hba pinned to one
 client host (`--client-cidr a.b.c.d/32`, required on staging|production), CONNECT-to-other-DBs
 verification, and a Laravel `.env` hint instead of the K8s/PgBouncer follow-up.
-Refuses `iam|finance|ppc`.
+`--app-conn-limit` is mandatory with `--external`. pg_hba: dies if an existing `hostssl <db>` line has a different address. Refuses `iam|finance|ppc`.
 
 ```bash
 sudo bash new-service-db.sh mgtapps --target staging    --external --client-cidr 192.168.0.252/32 --app-conn-limit 20 --apply

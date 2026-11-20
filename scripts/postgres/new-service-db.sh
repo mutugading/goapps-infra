@@ -21,7 +21,7 @@ USAGE
 }
 
 SVC="" TARGET="" APPLY=0 APP_LIMIT=60 SQL_DIR="/usr/local/share/goapps/sql"
-FORCE_HOST=0 ALLOW_EXISTING=0 DROP=0 IKNOW=0 EXTERNAL=0 CIDR=""
+FORCE_HOST=0 ALLOW_EXISTING=0 DROP=0 IKNOW=0 EXTERNAL=0 CIDR="" LIMIT_SET=0
 
 if [[ $# -lt 1 ]]; then usage; exit 2; fi
 SVC="$1"; shift
@@ -29,7 +29,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --target) TARGET="${2:-}"; shift 2 ;;
     --apply) APPLY=1; shift ;;
-    --app-conn-limit) APP_LIMIT="${2:-}"; shift 2 ;;
+    --app-conn-limit) APP_LIMIT="${2:-}"; LIMIT_SET=1; shift 2 ;;
     --sql-dir) SQL_DIR="${2:-}"; shift 2 ;;
     --force-host) FORCE_HOST=1; shift ;;
     --allow-existing) ALLOW_EXISTING=1; shift ;;
@@ -50,6 +50,7 @@ fi
 if [[ $EXTERNAL -eq 1 ]]; then
   [[ ! "$SVC" =~ ^(iam|finance|ppc)$ && $ALLOW_EXISTING -eq 0 ]] || die "--external refuses svc iam|finance|ppc and --allow-existing"
 fi
+[[ $EXTERNAL -eq 0 || $LIMIT_SET -eq 1 ]] || die "--external requires an explicit --app-conn-limit N"
 [[ "$APP_LIMIT" =~ ^[0-9]+$ ]] || die "--app-conn-limit must be an integer"
 case "$TARGET" in local|staging|production) ;; *) die "--target local|staging|production required" ;; esac
 if [[ $DROP -eq 1 && "$SVC" != p8btest* && $IKNOW -eq 0 ]]; then
@@ -283,6 +284,11 @@ step4_hba() {
     dry "SELECT pg_reload_conf(); check pg_hba_file_rules errors, restore backup + exit 1 on error"
     return
   fi
+  if [[ $EXTERNAL -eq 1 ]]; then
+    local have_cidr
+    have_cidr="$(sudo awk -v db="$DB" '$1=="hostssl" && $2==db {print $4}' "$HBA" | grep -vxF "$HBA_CIDR" || true)"
+    [[ -z "$have_cidr" ]] || die "existing 'hostssl $DB' line in $HBA has address '$have_cidr' != $HBA_CIDR; edit manually (no change made)"
+  fi
   local bak="$HBA.bak-$SVC-$TS" changed=0
   sudo cp -p "$HBA" "$bak"
   if sudo grep -qE "^hostssl[[:space:]]+${DB}[[:space:]]" "$HBA"; then
@@ -295,7 +301,10 @@ step4_hba() {
   if sudo grep -E "$MON_RE" "$HBA" | grep -qE "(^|[[:space:],])${DB}([[:space:],]|$)"; then
     say "  monitor line already lists $DB (SKIP)"
   else
-    [[ "$(sudo grep -cE "$MON_RE" "$HBA")" == 1 ]] || die "expected exactly one 'host <..._db,...> monitor 127.0.0.1/32' line in $HBA"
+    if [[ "$(sudo grep -cE "$MON_RE" "$HBA")" != 1 ]]; then
+      [[ $changed -eq 0 ]] || sudo cp -p "$bak" "$HBA"
+      die "expected exactly one 'host <..._db,...> monitor 127.0.0.1/32' line in $HBA (restored $bak)"
+    fi
     sudo sed -i -E "/${MON_RE//\//\\/}/ s/^(host[[:space:]]+[^[:space:]]+)/\1,${DB}/" "$HBA"
     changed=1
   fi
@@ -384,6 +393,7 @@ step7_verify() {
   fi
   if [[ $VPS -eq 1 ]]; then
     check "pg_hba has $DB line" postgres "1" "SELECT count(*) FROM pg_hba_file_rules WHERE '$DB'=ANY(database) AND '$APP'=ANY(user_name) AND error IS NULL"
+    [[ $EXTERNAL -eq 0 ]] || check "pg_hba $DB client address" postgres "1" "SELECT count(*) FROM pg_hba_file_rules WHERE '$DB'=ANY(database) AND address='${HBA_CIDR%/32}' AND netmask='255.255.255.255' AND error IS NULL"
     check "pg_hba no errors" postgres "0" "SELECT count(*) FROM pg_hba_file_rules WHERE error IS NOT NULL"
   fi
   if [[ $FAILS -gt 0 ]]; then say "VERIFY: FAIL ($FAILS)"; exit 1; fi
@@ -397,11 +407,12 @@ step8_followup() {
   step 8 "follow-up (printed, NOT executed)"
   [[ $TARGET != local ]] || { ip=127.0.0.1; port=5440; }
   if [[ $EXTERNAL -eq 1 ]]; then
+    local sslm=require; [[ $TARGET != local ]] || sslm=prefer
     cat <<EOT
 
 # ---- Laravel .env (client ${CIDR:-local}) ----
-DB_CONNECTION=pgsql  DB_HOST=${ip}  DB_PORT=${port}  DB_DATABASE=${DB}  DB_USERNAME=${APP}  DB_SSLMODE=require
-# php artisan migrate: run with DB_USERNAME=${OWNER} (owner password), then switch back to ${APP}
+PG_HOST=${ip} PG_PORT=${port} PG_DATABASE=${DB} PG_USERNAME=${APP} PG_SSLMODE=${sslm} PG_EMULATE_PREPARES=false
+# migrate as ${OWNER}: see docs/migration-postgres/v2/non-goapps-app-laravel.md §4
 
 # ---- Repo edits (goapps-infra, via PR) ----
 # base/monitoring/dashboards/grafana-dashboard-postgres-vps-configmap.yaml : add ${DB} to the datname regex
