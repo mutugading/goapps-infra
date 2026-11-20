@@ -15,11 +15,13 @@ Usage: $0 <svc> --target local|staging|production [options]
   --allow-existing      allow svc iam|finance|ppc (idempotency testing)
   --drop                reverse everything (needs --apply; svc must start with p8btest or --i-know)
   --i-know              permit --drop for any svc
+  --external            non-goapps app (e.g. Laravel): direct 5432 from one host, no K8s/PgBouncer follow-up
+  --client-cidr IP/32   client host for pg_hba (required with --external on staging|production)
 USAGE
 }
 
 SVC="" TARGET="" APPLY=0 APP_LIMIT=60 SQL_DIR="/usr/local/share/goapps/sql"
-FORCE_HOST=0 ALLOW_EXISTING=0 DROP=0 IKNOW=0
+FORCE_HOST=0 ALLOW_EXISTING=0 DROP=0 IKNOW=0 EXTERNAL=0 CIDR=""
 
 if [[ $# -lt 1 ]]; then usage; exit 2; fi
 SVC="$1"; shift
@@ -33,6 +35,8 @@ while [[ $# -gt 0 ]]; do
     --allow-existing) ALLOW_EXISTING=1; shift ;;
     --drop) DROP=1; shift ;;
     --i-know) IKNOW=1; shift ;;
+    --external) EXTERNAL=1; shift ;;
+    --client-cidr) CIDR="${2:-}"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) echo "unknown arg: $1" >&2; usage; exit 2 ;;
   esac
@@ -43,11 +47,22 @@ die() { echo "ERROR: $*" >&2; exit 1; }
 if [[ "$SVC" =~ ^(iam|finance|ppc)$ && $ALLOW_EXISTING -eq 0 ]]; then
   die "svc '$SVC' already exists in production; use --allow-existing only for idempotency tests"
 fi
+if [[ $EXTERNAL -eq 1 ]]; then
+  [[ ! "$SVC" =~ ^(iam|finance|ppc)$ && $ALLOW_EXISTING -eq 0 ]] || die "--external refuses svc iam|finance|ppc and --allow-existing"
+fi
 [[ "$APP_LIMIT" =~ ^[0-9]+$ ]] || die "--app-conn-limit must be an integer"
 case "$TARGET" in local|staging|production) ;; *) die "--target local|staging|production required" ;; esac
 if [[ $DROP -eq 1 && "$SVC" != p8btest* && $IKNOW -eq 0 ]]; then
   die "--drop only for svc starting with p8btest unless --i-know"
 fi
+
+if [[ -n "$CIDR" ]]; then
+  [[ $EXTERNAL -eq 1 ]] || die "--client-cidr needs --external"
+  [[ "$CIDR" =~ ^((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])\.){3}(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])/32$ && "$CIDR" != 0.0.0.0/* ]] \
+    || die "--client-cidr must be a single IPv4 host as a.b.c.d/32"
+fi
+[[ $EXTERNAL -eq 0 || $TARGET == local || -n "$CIDR" ]] || die "--external on $TARGET requires --client-cidr IP/32"
+HBA_CIDR="${CIDR:-192.168.0.0/24}"
 
 DB="${SVC}_db" OWNER="${SVC}_owner" APP="${SVC}_app" RO="${SVC}_ro"
 DRY=$((1 - APPLY))
@@ -174,6 +189,11 @@ step1_roles() {
       else read_pw "$OWNER"; PW_OWNER="$REPLY_PW"; read_pw "$APP"; PW_APP="$REPLY_PW"; fi
     fi
   fi
+  local ext_sql=""
+  [[ $EXTERNAL -eq 0 ]] || ext_sql="ALTER ROLE :\"app\" SET statement_timeout = '30s';
+ALTER ROLE :\"app\" SET idle_in_transaction_session_timeout = '60s';
+ALTER ROLE :\"owner\" SET statement_timeout = '15min';
+ALTER ROLE :\"owner\" SET idle_in_transaction_session_timeout = '5min';"
   run_sql postgres "$(cat <<'SQL'
 \set owner :svc '_owner'
 \set app   :svc '_app'
@@ -210,7 +230,7 @@ ALTER ROLE :"ro" NOLOGIN;
   \echo   dba_write absent: skipped
 \endif
 SQL
-)"
+)${ext_sql:+$'\n'$ext_sql}"
   if [[ $DRY -eq 0 ]]; then
     if [[ $have -eq 3 ]]; then say "  SKIP (roles existed; attributes re-asserted)"; else say "  OK"; fi
   fi
@@ -258,7 +278,7 @@ step4_hba() {
   if [[ $TARGET == local ]]; then say "  SKIP (local: no pg_hba edits)"; return; fi
   if [[ $DRY -eq 1 ]]; then
     dry "cp -p $HBA $HBA.bak-$SVC-$TS"
-    dry "insert before '^hostssl all ilham,...': hostssl  $DB  $APP,$OWNER  192.168.0.0/24  scram-sha-256"
+    dry "insert before '^hostssl all ilham,...': hostssl  $DB  $APP,$OWNER  $HBA_CIDR  scram-sha-256"
     dry "append ,$DB to DATABASE column of the 'host ... monitor 127.0.0.1/32' line"
     dry "SELECT pg_reload_conf(); check pg_hba_file_rules errors, restore backup + exit 1 on error"
     return
@@ -269,7 +289,7 @@ step4_hba() {
     say "  hba line present (SKIP)"
   else
     sudo grep -qE '^hostssl[[:space:]]+all[[:space:]]+ilham' "$HBA" || die "anchor line 'hostssl all ilham,...' not found in $HBA"
-    sudo sed -i -E "/^hostssl[[:space:]]+all[[:space:]]+ilham/ i hostssl  ${DB}  ${APP},${OWNER}  192.168.0.0/24  scram-sha-256" "$HBA"
+    sudo sed -i -E "/^hostssl[[:space:]]+all[[:space:]]+ilham/ i hostssl  ${DB}  ${APP},${OWNER}  ${HBA_CIDR}  scram-sha-256" "$HBA"
     changed=1
   fi
   if sudo grep -E "$MON_RE" "$HBA" | grep -qE "(^|[[:space:],])${DB}([[:space:],]|$)"; then
@@ -341,6 +361,7 @@ step7_verify() {
   if [[ $DRY -eq 1 ]]; then
     dry "check role attrs (owner true|false|false|5, app true|false|true|$APP_LIMIT, ro f), db owner, CONNECT for app/ro/monitor,"
     dry "ro default privileges are SELECT-only, pg_hba_file_rules has $DB line and no errors (VPS)"
+    [[ $EXTERNAL -eq 0 ]] || dry "external: role timeouts set; app/owner CONNECT false on existing iam_db/finance_db/ppc_db"
     return
   fi
   check "owner attrs" postgres "true|false|false|5" "SELECT rolcanlogin||'|'||rolsuper||'|'||rolinherit||'|'||rolconnlimit FROM pg_roles WHERE rolname='$OWNER'"
@@ -353,6 +374,14 @@ step7_verify() {
   check "PUBLIC no CONNECT" postgres "0" "SELECT count(*) FROM pg_database d, aclexplode(d.datacl) a WHERE d.datname='$DB' AND a.grantee=0"
   check "ro default privs SELECT-only" "$DB" "0" "SELECT count(*) FROM pg_default_acl d, aclexplode(d.defaclacl) a WHERE a.grantee='$RO'::regrole AND a.privilege_type<>'SELECT' AND d.defaclobjtype='r'"
   check "ro has default SELECT" "$DB" "t" "SELECT count(*)>0 FROM pg_default_acl d, aclexplode(d.defaclacl) a WHERE a.grantee='$RO'::regrole AND a.privilege_type='SELECT'"
+  if [[ $EXTERNAL -eq 1 ]]; then
+    for r in "$APP" "$OWNER"; do
+      check "$r timeouts set" postgres "t" "SELECT count(*)=2 FROM pg_db_role_setting s JOIN pg_roles r ON r.oid=s.setrole, unnest(s.setconfig) c WHERE r.rolname='$r' AND s.setdatabase=0 AND (c LIKE 'statement_timeout=%' OR c LIKE 'idle_in_transaction_session_timeout=%')"
+      for d in iam_db finance_db ppc_db; do
+        db_exists "$d" && check "$r no CONNECT $d" postgres "f" "SELECT has_database_privilege('$r','$d','CONNECT')"
+      done
+    done
+  fi
   if [[ $VPS -eq 1 ]]; then
     check "pg_hba has $DB line" postgres "1" "SELECT count(*) FROM pg_hba_file_rules WHERE '$DB'=ANY(database) AND '$APP'=ANY(user_name) AND error IS NULL"
     check "pg_hba no errors" postgres "0" "SELECT count(*) FROM pg_hba_file_rules WHERE error IS NOT NULL"
@@ -362,10 +391,24 @@ step7_verify() {
 }
 
 step8_followup() {
-  local ns ip
+  local ns ip port=5432
   ns="goapps-staging"; ip="192.168.0.60"
   if [[ $TARGET == production ]]; then ns="goapps-production"; ip="192.168.0.40"; fi
   step 8 "follow-up (printed, NOT executed)"
+  [[ $TARGET != local ]] || { ip=127.0.0.1; port=5440; }
+  if [[ $EXTERNAL -eq 1 ]]; then
+    cat <<EOT
+
+# ---- Laravel .env (client ${CIDR:-local}) ----
+DB_CONNECTION=pgsql  DB_HOST=${ip}  DB_PORT=${port}  DB_DATABASE=${DB}  DB_USERNAME=${APP}  DB_SSLMODE=require
+# php artisan migrate: run with DB_USERNAME=${OWNER} (owner password), then switch back to ${APP}
+
+# ---- Repo edits (goapps-infra, via PR) ----
+# base/monitoring/dashboards/grafana-dashboard-postgres-vps-configmap.yaml : add ${DB} to the datname regex
+# base/monitoring/alert-rules/postgres-vps-alerts.yaml : add ${DB} to the iam_db|finance_db|ppc_db regex
+EOT
+    return
+  fi
   if [[ $TARGET == local ]]; then
     cat <<EOT
 
