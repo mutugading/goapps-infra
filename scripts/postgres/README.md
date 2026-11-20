@@ -28,3 +28,17 @@ and prints the follow-up block (K8s secret, PgBouncer userlist, repo edits).
 - `--drop --apply` reverses everything (only for `p8btest*` svc unless `--i-know`). Use for throwaway tests.
 
 See `docs/migration-postgres/v2/monitoring-new-service-db.md` for the monitoring verify block.
+
+## External (non-goapps) app mode
+
+`--external` provisions a DB for an app outside the goapps stack (ADR 0002:
+`goapps-backend/docs/adr/0002-non-goapps-app-databases.md`). Same roles/DB/grants, plus
+role timeouts (`_app` 30s stmt / 60s idle-in-tx, `_owner` 15min / 5min), pg_hba pinned to one
+client host (`--client-cidr a.b.c.d/32`, required on staging|production), CONNECT-to-other-DBs
+verification, and a Laravel `.env` hint instead of the K8s/PgBouncer follow-up.
+`--app-conn-limit` is mandatory with `--external`. pg_hba: dies if an existing `hostssl <db>` line has a different address. Refuses `iam|finance|ppc`.
+
+```bash
+sudo bash new-service-db.sh mgtapps --target staging    --external --client-cidr 192.168.0.252/32 --app-conn-limit 20 --apply
+sudo bash new-service-db.sh mgtapps --target production --external --client-cidr 192.168.0.248/32 --app-conn-limit 30 --apply
+```

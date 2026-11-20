@@ -306,7 +306,7 @@ data:
                   to: 0
                 datasourceUid: prometheus
                 model:
-                  expr: 'increase(pg_stat_database_deadlocks{job="vps-postgres",datname=~"iam_db|finance_db|ppc_db"}[10m]) > 0'
+                  expr: 'increase(pg_stat_database_deadlocks{job="vps-postgres",datname=~"iam_db|finance_db|ppc_db|mgtapps_db"}[10m]) > 0'
                   refId: A
               - refId: C
                 relativeTimeRange:
