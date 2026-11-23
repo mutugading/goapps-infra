@@ -1,0 +1,131 @@
+# Payroll Migration Job: golang-migrate as `payroll_migrator` (it assumes ROLE payroll_owner through the
+# role setting from deploy/payroll/bootstrap.sql, D-04). The `payroll_db` DB (D-66), roles and schemas are created
+# beforehand by the DBA running bootstrap.sql as superuser (cluster-level, not a migration), so there is no
+# createdb Job. Run order: bootstrap.sql (DBA, once) -> payroll-migrate (migrate up, then grants.sql) -> deploy.
+#
+# Two steps in one Job (D-66 C(2)): migrations carry no GRANT/REVOKE (ADR 0001), so object grants live in
+# deploy/grants.sql (declarative, idempotent, one transaction) and MUST run as the owner after every migrate.
+#   1. initContainer payroll-migrate (payroll image): `migrate up`, then copies /app/deploy/grants.sql to an
+#      emptyDir. The runtime image has no psql on purpose.
+#   2. container payroll-grants (postgres:18.6-alpine): psql -f grants.sql as the same owner login.
+# The Job only completes when both succeed; if grants fail, migrate is already applied and the app keeps the
+# previous grants (the script is all-or-nothing): fix, then re-run the Job (migrate up is a no-op).
+#
+# MANUAL USAGE (render per environment, then substitute the image tag):
+#   kustomize build services/payroll-service/overlays/<env>/jobs | sed "s|IMAGE_TAG|<tag>|" | kubectl apply -f -
+#   kubectl logs -f job/payroll-migrate -n <namespace>
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: payroll-migrate
+  labels:
+    app: payroll-service
+    component: migration
+    app.kubernetes.io/name: payroll-service
+    app.kubernetes.io/component: migration
+    app.kubernetes.io/part-of: goapps
+spec:
+  backoffLimit: 1
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app: payroll-service
+        component: migration
+    spec:
+      imagePullSecrets:
+        - name: ghcr-secret
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      volumes:
+        - name: grants
+          emptyDir:
+            sizeLimit: 1Mi
+      initContainers:
+        - name: payroll-migrate
+          image: ghcr.io/mutugading/payroll-service:IMAGE_TAG
+          imagePullPolicy: Always
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          command:
+            - /bin/sh
+            - -c
+            - /app/migrate -path /app/migrations -database "$DATABASE_URL" up && cp /app/deploy/grants.sql /grants/grants.sql
+          volumeMounts:
+            - name: grants
+              mountPath: /grants
+          env:
+            - name: DATABASE_USER
+              valueFrom:
+                secretKeyRef:
+                  name: payroll-db-secret
+                  key: OWNER_USER
+            - name: DATABASE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: payroll-db-secret
+                  key: OWNER_PASSWORD
+            # DATABASE_URL (host + sslmode) is set per environment by the overlay patch.
+            - name: DATABASE_URL
+              value: "OVERRIDDEN_BY_OVERLAY"
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"
+      containers:
+        - name: payroll-grants
+          image: postgres:18.6-alpine   # pinned minor: this container holds the owner credentials
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          command: ["psql", "-X", "-q", "-v", "ON_ERROR_STOP=1", "-f", "/grants/grants.sql"]
+          volumeMounts:
+            - name: grants
+              mountPath: /grants
+              readOnly: true
+          env:
+            # Same owner login as migrate (role setting -> payroll_owner). libpq env, not DATABASE_URL: the
+            # golang-migrate URL carries x-migrations-table, which libpq rejects. PGHOST is set by the overlay.
+            - name: PGHOST
+              value: "OVERRIDDEN_BY_OVERLAY"
+            - name: PGPORT
+              value: "5432"
+            - name: PGDATABASE
+              value: "payroll_db"
+            - name: PGUSER
+              valueFrom:
+                secretKeyRef:
+                  name: payroll-db-secret
+                  key: OWNER_USER
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: payroll-db-secret
+                  key: OWNER_PASSWORD
+            - name: PGSSLMODE
+              value: "require"
+            - name: PGAPPNAME
+              value: "payroll-grants"
+            - name: PGOPTIONS
+              value: "-c lock_timeout=10s -c statement_timeout=0"
+          resources:
+            requests:
+              memory: "32Mi"
+              cpu: "20m"
+            limits:
+              memory: "128Mi"
+              cpu: "200m"

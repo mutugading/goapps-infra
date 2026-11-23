@@ -61,6 +61,7 @@ jobs:
             argocd app sync frontend-staging --server localhost:8080 --plaintext --prune || true
             argocd app sync iam-service-staging --server localhost:8080 --plaintext --prune || true
             argocd app sync ppc-service-staging --server localhost:8080 --plaintext --prune || true
+            argocd app sync payroll-service-staging --server localhost:8080 --plaintext --prune || true
           "
           echo "Staging sync triggered"
 
@@ -80,6 +81,7 @@ jobs:
             argocd app wait frontend-staging --server localhost:8080 --plaintext --timeout 600 || true
             argocd app wait iam-service-staging --server localhost:8080 --plaintext --timeout 600 || true
             argocd app wait ppc-service-staging --server localhost:8080 --plaintext --timeout 600 || true
+            argocd app wait payroll-service-staging --server localhost:8080 --plaintext --timeout 600 || true
           "
           echo "Applications healthy"
 
@@ -113,6 +115,7 @@ jobs:
             argocd app sync finance-service-production --server localhost:8080 --plaintext --prune
             argocd app sync iam-service-production --server localhost:8080 --plaintext --prune
             argocd app sync ppc-service-production --server localhost:8080 --plaintext --prune
+            # payroll-service-production sengaja tidak di sini: sync manual setelah image-updater memasang tag SHA (T028h)
             argocd app sync frontend-production --server localhost:8080 --plaintext --prune
           "
           echo "Production sync triggered"
@@ -163,6 +166,7 @@ jobs:
             argocd app sync finance-service-production --server localhost:8080 --plaintext --prune
             argocd app sync iam-service-production --server localhost:8080 --plaintext --prune
             argocd app sync ppc-service-production --server localhost:8080 --plaintext --prune
+            # payroll-service-production sengaja tidak di sini: sync manual setelah image-updater memasang tag SHA (T028h)
             argocd app sync frontend-production --server localhost:8080 --plaintext --prune
           "
           echo "Production sync triggered"

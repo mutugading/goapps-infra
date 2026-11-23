@@ -1,0 +1,13 @@
+# NetworkPolicy for the one-off payroll Jobs (T028h2 (5)): nothing may connect IN to a CLI/migrate pod. Egress is
+# deliberately left open: the CLIs reach the VPS Postgres (direct), Oracle HRIS and mail.mutugading.com:465 by
+# IP/DNS that this repo does not pin (restrict to CIDRs once DevOps fixes them). Enforced only if the CNI supports it.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: payroll-jobs-deny-ingress
+spec:
+  podSelector:
+    matchExpressions:
+      - {key: component, operator: In, values: [cli, migration]}
+      - {key: app, operator: In, values: [payroll-service]}
+  policyTypes: [Ingress]
