@@ -9,3 +9,4 @@ resources:
 commonLabels:
   app.kubernetes.io/name: mutugading-web
   app.kubernetes.io/component: web
+  app.kubernetes.io/part-of: goapps

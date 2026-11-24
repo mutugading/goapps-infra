@@ -321,7 +321,8 @@ goapps-infra/
 │   │   └── overlays/
 │   │       ├── staging/              # Staging overrides
 │   │       └── production/           # Production overrides
-│   └── frontend/                     # Frontend service
+│   ├── frontend/                     # Frontend service
+│   └── mutugading-web/               # Company marketing site (Next.js)
 │       ├── base/
 │       └── overlays/
 │

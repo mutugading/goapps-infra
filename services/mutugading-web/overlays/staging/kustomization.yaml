@@ -2,33 +2,33 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: goapps-staging
 resources:
-- ../../base
+  - ../../base
 patches:
-- target:
-    kind: Deployment
-    name: mutugading-web
-  patch: |-
-    - op: replace
-      path: /spec/replicas
-      value: 1
-    - op: add
-      path: /spec/template/spec/containers/0/env/-
-      value:
-        name: SITE_NOINDEX
-        value: "1"
-- target:
-    kind: Ingress
-    name: mutugading-web
-  patch: |-
-    - op: replace
-      path: /spec/rules/0/host
-      value: staging.mutugading.com
-    - op: add
-      path: /spec/tls
-      value:
-      - hosts:
-        - staging.mutugading.com
-        secretName: goapps-tls   # wildcard *.mutugading.com
+  - target:
+      kind: Deployment
+      name: mutugading-web
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: SITE_NOINDEX
+          value: "1"
+  - target:
+      kind: Ingress
+      name: mutugading-web
+    patch: |-
+      - op: replace
+        path: /spec/rules/0/host
+        value: staging.mutugading.com
+      - op: add
+        path: /spec/tls
+        value:
+        - hosts:
+          - staging.mutugading.com
+          secretName: goapps-tls   # wildcard *.mutugading.com
 images:
-- name: ghcr.io/mutugading/mutugading-web
-  newTag: latest   # placeholder: ArgoCD Image Updater rewrites this
+  - name: ghcr.io/mutugading/mutugading-web
+    newTag: eba458b   # short SHA; ArgoCD Image Updater rewrites this

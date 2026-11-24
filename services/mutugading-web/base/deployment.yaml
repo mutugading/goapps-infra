@@ -21,9 +21,12 @@ spec:
       labels:
         app: mutugading-web
     spec:
+      automountServiceAccountToken: false   # public site, never talks to the k8s API
       imagePullSecrets:
         - name: ghcr-secret
       securityContext:
+        seccompProfile:
+          type: RuntimeDefault
         runAsNonRoot: true
         runAsUser: 1001
         runAsGroup: 1001
