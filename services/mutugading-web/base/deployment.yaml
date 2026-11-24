@@ -42,6 +42,10 @@ spec:
               value: "production"
             - name: NEXT_TELEMETRY_DISABLED
               value: "1"
+            # libvips (sharp, next/image) defaults to one thread per HOST core and ignores the CPU limit;
+            # cap it so image encoding cannot starve the health probe.
+            - name: VIPS_CONCURRENCY
+              value: "1"
           securityContext:
             allowPrivilegeEscalation: false
             # ponytail: rootfs stays writable — Next ISR persists regenerated pages into /app/.next/server
@@ -51,15 +55,16 @@ spec:
               drop: ["ALL"]
           resources:
             requests:
-              memory: "128Mi"
+              memory: "256Mi"
               cpu: "100m"
             limits:
-              memory: "512Mi"
+              memory: "1Gi"     # sharp decodes full-size photos; 512Mi was OOMKilled on staging
               cpu: "750m"       # Next.js needs CPU limit >= 500m
           startupProbe:
             httpGet:
               path: /api/health
               port: 3000
+            timeoutSeconds: 5   # default 1s is too tight while sharp is encoding images
             initialDelaySeconds: 5
             periodSeconds: 5
             failureThreshold: 12    # 5 + (5*12) = 65s max startup time
@@ -67,11 +72,13 @@ spec:
             httpGet:
               path: /api/health
               port: 3000
+            timeoutSeconds: 5   # default 1s is too tight while sharp is encoding images
             periodSeconds: 10
-            failureThreshold: 3
+            failureThreshold: 6     # restart only after ~60s unresponsive
           readinessProbe:
             httpGet:
               path: /api/health
               port: 3000
+            timeoutSeconds: 5   # default 1s is too tight while sharp is encoding images
             periodSeconds: 5
             failureThreshold: 3
