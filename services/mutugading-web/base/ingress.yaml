@@ -1,0 +1,20 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: mutugading-web
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    # No configuration-snippet: snippets are blocked in this cluster.
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: placeholder.mutugading.com   # overridden per overlay
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: mutugading-web
+                port:
+                  number: 80

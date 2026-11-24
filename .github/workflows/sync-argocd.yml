@@ -59,6 +59,7 @@ jobs:
             argocd app sync finance-cost-orchestrator-staging --server localhost:8080 --plaintext --prune || true
             argocd app sync finance-cost-worker-staging --server localhost:8080 --plaintext --prune || true
             argocd app sync frontend-staging --server localhost:8080 --plaintext --prune || true
+            argocd app sync mutugading-web-staging --server localhost:8080 --plaintext --prune || true
             argocd app sync iam-service-staging --server localhost:8080 --plaintext --prune || true
             argocd app sync ppc-service-staging --server localhost:8080 --plaintext --prune || true
           "
@@ -78,6 +79,7 @@ jobs:
             argocd app wait finance-cost-orchestrator-staging --server localhost:8080 --plaintext --timeout 600 || true
             argocd app wait finance-cost-worker-staging --server localhost:8080 --plaintext --timeout 600 || true
             argocd app wait frontend-staging --server localhost:8080 --plaintext --timeout 600 || true
+            argocd app wait mutugading-web-staging --server localhost:8080 --plaintext --timeout 600 || true
             argocd app wait iam-service-staging --server localhost:8080 --plaintext --timeout 600 || true
             argocd app wait ppc-service-staging --server localhost:8080 --plaintext --timeout 600 || true
           "
@@ -114,6 +116,7 @@ jobs:
             argocd app sync iam-service-production --server localhost:8080 --plaintext --prune
             argocd app sync ppc-service-production --server localhost:8080 --plaintext --prune
             argocd app sync frontend-production --server localhost:8080 --plaintext --prune
+            # mutugading-web-production is added at cutover (DNS still on old WordPress)
           "
           echo "Production sync triggered"
 

@@ -1,0 +1,40 @@
+# !!! NOT LIVE !!!
+# Apex mutugading.com is only in TLS (no rule) so from-to-www-redirect 308s it to www.
+# www/apex DNS still point at the old WordPress site. Before cutover, verify the
+# goapps-tls cert has the apex (mutugading.com) SAN -- the wildcard *.mutugading.com
+# does NOT cover the apex. If it lacks it, create a separate TLS secret and
+# point the apex host at it below.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: goapps-production
+resources:
+  - ../../base
+  - pdb.yaml
+patches:
+  - target:
+      kind: Deployment
+      name: mutugading-web
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 2
+  - target:
+      kind: Ingress
+      name: mutugading-web
+    patch: |-
+      - op: add
+        path: /metadata/annotations/nginx.ingress.kubernetes.io~1from-to-www-redirect
+        value: "true"
+      - op: replace
+        path: /spec/rules/0/host
+        value: www.mutugading.com
+      - op: add
+        path: /spec/tls
+        value:
+        - hosts:
+          - www.mutugading.com
+          - mutugading.com
+          secretName: goapps-tls
+images:
+  - name: ghcr.io/mutugading/mutugading-web
+    newTag: eba458b   # short SHA; ArgoCD Image Updater rewrites this
