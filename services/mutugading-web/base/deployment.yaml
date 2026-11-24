@@ -41,14 +41,11 @@ spec:
               value: "1"
           securityContext:
             allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: true
+            # ponytail: rootfs stays writable — Next ISR persists regenerated pages into /app/.next/server
+            # (an emptyDir there would hide the build output). Revisit with a custom cacheHandler (Redis).
+            readOnlyRootFilesystem: false
             capabilities:
               drop: ["ALL"]
-          volumeMounts:
-            - name: next-cache
-              mountPath: /app/.next/cache
-            - name: tmp
-              mountPath: /tmp
           resources:
             requests:
               memory: "128Mi"
@@ -75,10 +72,3 @@ spec:
               port: 3000
             periodSeconds: 5
             failureThreshold: 3
-      volumes:
-        - name: next-cache
-          emptyDir:
-            sizeLimit: 512Mi
-        - name: tmp
-          emptyDir:
-            sizeLimit: 64Mi
