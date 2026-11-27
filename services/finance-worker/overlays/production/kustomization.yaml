@@ -10,4 +10,4 @@ patches:
 - path: patches/env-erp.yaml
 images:
 - name: ghcr.io/mutugading/finance-service
-  newTag: 250746f
+  newTag: f2b7dbc
